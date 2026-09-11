@@ -99,10 +99,16 @@ jobs:
         run: |
           LOG=/tmp/gradle.log
           [ -f "$LOG" ] || exit 0
-          grep -E "error:|error generated|FAILED:|FAILURE:|CMake Error|ninja: build stopped|symbol:|location:|note:" "$LOG" \
-            | head -60 | while IFS= read -r line; do
-              printf '::error::%s\n' "$(printf '%s' "$line" | cut -c1-240)"
-            done
+          # Errors first (annotations are capped at 50/check-run and notes
+          # otherwise crowd them out); dedup keeps repeated per-TU errors
+          # (same header error in many TUs) from flooding the cap.
+          {
+            grep -E "error:|error generated|FAILED:|FAILURE:|CMake Error|ninja: build stopped|symbol:|location:" "$LOG" \
+              | awk '!seen[$0]++' | head -45
+            grep -E "note:" "$LOG" | awk '!seen[$0]++' | head -10
+          } | while IFS= read -r line; do
+            printf '::error::%s\n' "$(printf '%s' "$line" | cut -c1-240)"
+          done
 
       - name: Upload build log (on failure)
         if: failure()

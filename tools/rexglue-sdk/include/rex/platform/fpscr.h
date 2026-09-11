@@ -75,7 +75,13 @@ struct FPSCRPlatform {
     return csr;
   }
 
-  static inline void setcsr(u32 csr) noexcept { __asm__ __volatile__("msr fpcr, %0" : : "r"(csr)); }
+  // MSR into FPCR requires a 64-bit X register operand; a u32 operand makes
+  // the assembler bind a W register and fails ("invalid operand in inline
+  // asm"). Widen through a local u64 so the constraint allocates Xn.
+  static inline void setcsr(u32 csr) noexcept {
+    const u64 value = csr;
+    __asm__ __volatile__("msr fpcr, %0" : : "r"(value));
+  }
 
   static inline void InitHostExceptions(u32& csr) noexcept {
     csr &= ~ExceptionMask;  // Clear enable bits to disable exceptions
