@@ -956,7 +956,7 @@ public final class VirtualPadView extends View {
         float cx = r.centerX(), cy = r.centerY(), rad = r.width() * 0.5f;
         pChrome.setAlpha(0xE6);
         canvas.drawCircle(cx, cy, rad, pChrome);
-        pTextSmall.setColor(visible ? 0xFFDDFFFFFF : PadTheme.HIDDEN_TINT);
+        pTextSmall.setColor(visible ? 0xDDFFFFFF : PadTheme.HIDDEN_TINT);
         pTextSmall.setTextSize(rad * 0.9f);
         canvas.drawText(visible ? "👁" : "🚫", cx, cy + pTextSmall.getTextSize() * 0.34f, pTextSmall);
     }
