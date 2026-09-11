@@ -30,8 +30,8 @@ public final class PadSettingsDialog {
 
         LinearLayout root = new LinearLayout(context);
         root.setOrientation(LinearLayout.VERTICAL);
-        int pad = (int) (20 * context.getResources().getDisplayMetrics().density);
-        root.setPadding(pad, pad / 2, pad, pad / 2);
+        int padPx = (int) (20 * context.getResources().getDisplayMetrics().density);
+        root.setPadding(padPx, padPx / 2, padPx, padPx / 2);
 
         // --- Enable / disable the whole on-screen gamepad ---------------------
         final CheckBox enabled = new CheckBox(context);
