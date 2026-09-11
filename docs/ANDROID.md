@@ -24,18 +24,17 @@ launch the app asks for the folder with your own extracted game files
 ./scripts/build-android.sh                     # debug APK
 ./scripts/build-android.sh --release           # release APK (debug-signed)
 ./scripts/build-android.sh --install           # build + adb install
-./scripts/build-android.sh --xex ~/default.xex # re-run codegen from your XEX
 ./scripts/build-android.sh --turnip driver.zip # bundle a Turnip GPU driver
 ```
 
-`--xex` accepts a `default.xex` or a whole game **ISO** (it gets extracted on
-the way) and re-runs the ReXGlue codegen locally before the APK build, so the
-APK is compiled from *your* disc's freshly generated code — real PPC fences
-and page-granularity handling included. Requires the desktop build
-prerequisites (clang, ninja, and the dev packages the desktop CI installs).
+The build uses the **committed generated code** (`simpsons/generated`),
+exactly like the Windows/Linux builds — no game dump is needed at build
+time. Game data is supplied by the player on the device (folder pick or the
+on-device ISO install below).
 
 `--turnip` accepts a Turnip driver ZIP (any `libvulkan*.so` inside) or a bare
 `.so`, and packages it into the APK (see [GPU drivers](#gpu-drivers-turnip)).
+Pure convenience — drivers can also be installed from a ZIP right in the app.
 
 CI: `.github/workflows/build-android.yml` builds a debug APK on every push/PR
 and uploads it as an artifact — no game dump needed, everything compiles from
@@ -43,12 +42,6 @@ the repository (vendored SDK + committed generated code).
 
 Manual workflow runs (Actions tab → *Android build* → *Run workflow*) accept:
 
-* **game_url** — a direct URL to your own `default.xex` or the game ISO. The
-  workflow extracts the XEX (if needed), builds the ReXGlue codegen CLI and
-  regenerates the recompiled code from your binary before building the APK.
-  Nothing game-related is published: the xex only ever lives inside that
-  private workflow run, and the resulting APK still requires your own game
-  data on the device.
 * **turnip_url** — a ZIP with an arm64 Turnip driver; it is bundled into the
   APK as `libvulkan.turnip.so`.
 * **build_type** — `debug` or `release`.
@@ -225,7 +218,8 @@ Key facts for maintainers:
   lock. The residual exposure is limited to game-internal plain-memory flag
   handshakes without atomics — the same exposure every pre-fence recomp
   port shipped with. Regenerating the code from your `default.xex` with the
-  updated SDK removes even that.
+  updated SDK (`cd simpsons && rexglue codegen simpsons_manifest.toml` — a
+  manual developer step, never part of the normal build) removes even that.
 * **REX_PHYS_HOST_OFFSET** resolves through a runtime variable on Android
   so 16 KB-page devices (Pixel 8+ with 16 KB kernels) get the same 0x1000
   skew Windows uses; desktop builds keep their compile-time constants.

@@ -2,22 +2,17 @@ name: Android build
 
 # APK build for the Android port (arm64-v8a, Vulkan).
 #
-# Push/PR: quick sanity build (debug APK from the committed generated code).
+# Push/PR: quick sanity build (debug APK from the committed generated code -
+# exactly like the Windows/Linux CI, no game dump needed: the repository
+# ships the pre-generated recompiled sources).
 #
 # Manual (Actions tab -> Run workflow): optionally supply
-#   - game_url:   a direct URL to YOUR OWN default.xex or the game ISO. The
-#                 workflow then re-runs the ReXGlue codegen from that binary
-#                 (extracting the XEX from the ISO on the way, if needed) and
-#                 builds the APK with the freshly generated code - fences,
-#                 page-offset macros and all - instead of the committed tree.
 #   - turnip_url: a ZIP containing an arm64 Turnip (Mesa/Freedreno) driver
 #                 (any libvulkan*.so inside; it is packaged into the APK as
 #                 libvulkan.turnip.so and becomes selectable in Graphics).
+#                 Drivers can also be installed from a ZIP right in the app,
+#                 so this input is pure convenience for distributions.
 #   - build_type: debug or release.
-#
-# No game content is ever published: the xex is used only to compile the
-# recompiled code inside this private workflow run, and the resulting APK
-# still requires the player's own game data on the device.
 
 on:
   push:
@@ -25,10 +20,6 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
-      game_url:
-        description: "URL to YOUR OWN default.xex or game ISO (optional; re-runs codegen)"
-        required: false
-        default: ""
       turnip_url:
         description: "URL to a Turnip driver ZIP (arm64 libvulkan*.so) to bundle (optional)"
         required: false
@@ -39,15 +30,11 @@ on:
         default: "debug"
         options: [debug, release]
 
-env:
-  LLVM_VERSION: "20.1.8"
-
 jobs:
   android:
     name: Android arm64 APK
     runs-on: ubuntu-24.04
     env:
-      GAME_URL: ${{ inputs.game_url }}
       TURNIP_URL: ${{ inputs.turnip_url }}
       BUILD_TYPE: ${{ inputs.build_type || 'debug' }}
     defaults:
@@ -70,69 +57,6 @@ jobs:
           yes | sdkmanager --licenses > /dev/null || true
           sdkmanager "platform-tools" "platforms;android-35" \
             "build-tools;35.0.0" "cmake;3.31.1" > /dev/null
-
-      # ------------------------------------------------------------------
-      # Optional: game binary -> fresh codegen with ReXGlue
-      # ------------------------------------------------------------------
-      - name: Install host toolchain (clang-20 + dev libs for the codegen CLI)
-        if: env.GAME_URL != ''
-        run: |
-          wget -q https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 20
-          sudo apt-get update
-          sudo apt-get install -y ninja-build pkg-config \
-            libgtk-3-dev libvulkan-dev \
-            libx11-xcb-dev libxcb1-dev libx11-dev libxext-dev libxrandr-dev \
-            libxcursor-dev libxi-dev libxfixes-dev libxss-dev \
-            libxkbcommon-dev libxkbcommon-x11-dev \
-            libwayland-dev wayland-protocols libudev-dev \
-            libasound2-dev libpulse-dev libpipewire-0.3-dev
-
-      - name: Fetch the game binary (XEX or ISO)
-        if: env.GAME_URL != ''
-        run: |
-          set -euo pipefail
-          curl -fL --retry 3 --retry-delay 5 -o /tmp/gamefile "$GAME_URL"
-          ls -lh /tmp/gamefile
-          mkdir -p extracted
-          # XEX images start with the literal magic "XEX" (XEX0/1/2).
-          if head -c 3 /tmp/gamefile | grep -q '^XEX$'; then
-            echo "::group::Detected a raw XEX"
-            cp /tmp/gamefile extracted/default.xex
-            echo "::endgroup::"
-          else
-            echo "::group::Detected an ISO - extracting default.xex (full disc)"
-            cmake -S tools/extract-xiso -B tools/extract-xiso/build -G Ninja \
-              -DCMAKE_C_COMPILER=clang-20
-            cmake --build tools/extract-xiso/build
-            tools/extract-xiso/build/extract-xiso -x -d extracted /tmp/gamefile
-            echo "::endgroup::"
-          fi
-          test -f extracted/default.xex || {
-            echo "default.xex not found after extraction - not a Simpsons Game disc?"
-            exit 1
-          }
-          ls -lh extracted/default.xex
-
-      - name: Build the ReXGlue codegen CLI (host)
-        if: env.GAME_URL != ''
-        run: |
-          set -euo pipefail
-          cmake -S tools/rexglue-sdk -B tools/rexglue-sdk/out/host -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20
-          cmake --build tools/rexglue-sdk/out/host --target rexglue
-
-      - name: Re-run codegen from the supplied XEX
-        if: env.GAME_URL != ''
-        run: |
-          set -euo pipefail
-          cd simpsons
-          ../tools/rexglue-sdk/out/host/rexglue -f codegen simpsons_manifest.toml
-          test -f generated/default/sources.cmake
-          echo "Regenerated translation units:"
-          find generated/default -name '*.cpp' | wc -l
 
       # ------------------------------------------------------------------
       # Optional: bundle a Turnip driver

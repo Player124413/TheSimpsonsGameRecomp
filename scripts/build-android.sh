@@ -15,24 +15,22 @@
 #     the app's onboarding screen picks the folder (or installs from the
 #     player's own ISO) on first launch.
 #
+# The build uses the committed generated code (simpsons/generated), exactly
+# like the desktop builds - no game dump is needed. Game data is supplied by
+# the player on the device (folder pick or on-device ISO install).
+#
 # Usage:
-#   ./scripts/build-android.sh [--release] [--install]
-#                              [--xex <path-or-url>] [--turnip <zip-or-so>]
+#   ./scripts/build-android.sh [--release] [--install] [--turnip <zip-or-so>]
 #
 #   --release   assembleRelease instead of assembleDebug (default). Release
 #               builds are signed with the debug key (see build.gradle.kts).
 #   --install   additionally install the APK on the connected device
 #               (adb from ANDROID_HOME/platform-tools is used).
-#   --xex X     path (or http(s) URL) to YOUR OWN default.xex or the game
-#               ISO. When given, the ReXGlue codegen is re-run from that
-#               binary first (host clang + ninja + the dev packages from
-#               .github/workflows/build.yml are required) and the APK is
-#               built from the freshly generated code. An ISO is extracted
-#               with the repository's extract-xiso on the way.
 #   --turnip T  path or URL to a Turnip driver ZIP (any arm64 libvulkan*.so
 #               inside) or to a libvulkan*.so itself. The driver is packaged
 #               into the APK as libvulkan.turnip.so and becomes selectable
-#               under Graphics -> GPU driver.
+#               under Graphics -> GPU driver (players can also install a
+#               driver from a ZIP right in the app, no rebuild needed).
 #
 # Output:
 #   android/app/build/outputs/apk/{debug|release}/app-{debug|release}.apk
@@ -47,14 +45,11 @@ cd "${ROOT}/android"
 
 BUILD_TYPE="debug"
 DO_INSTALL=0
-XEX_SOURCE=""
 TURNIP_SOURCE=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --release) BUILD_TYPE="release"; shift ;;
     --install) DO_INSTALL=1; shift ;;
-    --xex) [[ $# -ge 2 ]] || { echo "--xex needs an argument" >&2; exit 1; }
-           XEX_SOURCE="$2"; shift 2 ;;
     --turnip) [[ $# -ge 2 ]] || { echo "--turnip needs an argument" >&2; exit 1; }
            TURNIP_SOURCE="$2"; shift 2 ;;
     -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -70,38 +65,6 @@ fetch_to() {  # fetch_to <source-path-or-url> <dest>
     cp "${src}" "${dst}"
   fi
 }
-
-# --- Optional: regenerate the code from the player's own XEX -----------------
-if [[ -n "${XEX_SOURCE}" ]]; then
-  echo "==> Preparing the game binary for codegen"
-  GAMEFILE="$(mktemp -d)/gamefile"
-  fetch_to "${XEX_SOURCE}" "${GAMEFILE}"
-  mkdir -p "${ROOT}/extracted"
-  if [[ "$(head -c 3 "${GAMEFILE}")" == "XEX" ]]; then
-    echo "    raw XEX detected"
-    cp "${GAMEFILE}" "${ROOT}/extracted/default.xex"
-  else
-    echo "    ISO detected - extracting with extract-xiso"
-    cmake -S "${ROOT}/tools/extract-xiso" -B "${ROOT}/tools/extract-xiso/build" -G Ninja
-    cmake --build "${ROOT}/tools/extract-xiso/build"
-    "${ROOT}/tools/extract-xiso/build/extract-xiso" -x -d "${ROOT}/extracted" "${GAMEFILE}"
-  fi
-  [[ -f "${ROOT}/extracted/default.xex" ]] || {
-    echo "default.xex not found after extraction" >&2; exit 1
-  }
-
-  echo "==> Building the ReXGlue codegen CLI (host)"
-  cmake -S "${ROOT}/tools/rexglue-sdk" -B "${ROOT}/tools/rexglue-sdk/out/host" -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release
-  cmake --build "${ROOT}/tools/rexglue-sdk/out/host" --target rexglue
-
-  echo "==> Re-running codegen (this takes a while)"
-  ( cd "${ROOT}/simpsons" && \
-    ../tools/rexglue-sdk/out/host/rexglue -f codegen simpsons_manifest.toml )
-  [[ -f "${ROOT}/simpsons/generated/default/sources.cmake" ]] || {
-    echo "codegen produced no sources.cmake" >&2; exit 1
-  }
-fi
 
 # --- Optional: bundle a Turnip driver ----------------------------------------
 if [[ -n "${TURNIP_SOURCE}" ]]; then
