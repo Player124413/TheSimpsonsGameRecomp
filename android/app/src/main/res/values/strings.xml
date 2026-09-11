@@ -45,4 +45,39 @@
         changes are saved automatically.</string>
     <string name="pad_edit_done">Done</string>
     <string name="pad_edit_exit">Exit editing</string>
+    <string name="pad_open_graphics">Graphics…</string>
+
+    <!-- Graphics settings -->
+    <string name="gfx_title">Graphics</string>
+    <string name="gfx_driver">GPU driver</string>
+    <string name="gfx_driver_system">System (vendor)</string>
+    <string name="gfx_driver_turnip">Turnip (bundled)</string>
+    <string name="gfx_driver_turnip_missing">No Turnip driver is packaged in this build
+        (build the APK with a Turnip driver to enable it).</string>
+    <string name="gfx_vsync">Vertical sync (VSync)</string>
+    <string name="gfx_resolution">Internal resolution</string>
+    <string name="gfx_resolution_hint">2x/3x sharpen the picture but need a strong GPU
+        - on most phones keep 1x.</string>
+    <string name="gfx_post">Anti-aliasing (post-processing)</string>
+    <string name="gfx_post_none">Off</string>
+    <string name="gfx_post_strong">(strong)</string>
+    <string name="gfx_fps">Frame limit</string>
+    <string name="gfx_fps_hint">30 saves battery and smooths out weaker phones;
+        60 is the full rate.</string>
+    <string name="gfx_letterbox">Keep 16:9 aspect ratio (letterbox)</string>
+    <string name="gfx_aniso">Anisotropic filtering</string>
+    <string name="gfx_aniso_default">Default</string>
+    <string name="gfx_restart_note">Applied at the next game start.</string>
+
+    <!-- On-device ISO install -->
+    <string name="setup_install_iso">Install from ISO…</string>
+    <string name="setup_install_help">Pick your legally-owned game ISO - it will be
+        extracted right on the phone (a few minutes and ~5 GB of free space).</string>
+    <string name="setup_extract_progress">Extracting ISO… %1$s of ~%2$s</string>
+    <string name="setup_extract_preparing">Preparing extraction…</string>
+    <string name="setup_extract_failed">Extraction failed: %1$s</string>
+    <string name="setup_extract_notiso">The picked file does not look like a Simpsons
+        Game ISO (no default.xex inside).</string>
+    <string name="setup_extract_space">Not enough free space: need about %1$s, available %2$s.</string>
+    <string name="setup_extract_done">Game installed from ISO.</string>
 </resources>

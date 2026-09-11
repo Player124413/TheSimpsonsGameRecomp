@@ -46,4 +46,41 @@
         автоматически.</string>
     <string name="pad_edit_done">Готово</string>
     <string name="pad_edit_exit">Выйти из редактирования</string>
+    <string name="pad_open_graphics">Графика…</string>
+
+    <!-- Graphics settings -->
+    <string name="gfx_title">Графика</string>
+    <string name="gfx_driver">Драйвер GPU</string>
+    <string name="gfx_driver_system">Системный (производителя)</string>
+    <string name="gfx_driver_turnip">Turnip (встроенный)</string>
+    <string name="gfx_driver_turnip_missing">В этой сборке нет драйвера Turnip
+        (соберите APK с драйвером Turnip, чтобы включить).</string>
+    <string name="gfx_vsync">Вертикальная синхронизация (VSync)</string>
+    <string name="gfx_resolution">Внутреннее разрешение</string>
+    <string name="gfx_resolution_hint">2x/3x делают картинку чётче, но нужны мощный
+        GPU — на большинстве телефонов оставьте 1x.</string>
+    <string name="gfx_post">Сглаживание (пост-обработка)</string>
+    <string name="gfx_post_none">Выкл</string>
+    <string name="gfx_post_strong">(сильное)</string>
+    <string name="gfx_fps">Ограничение кадров</string>
+    <string name="gfx_fps_hint">30 экономит батарею и выравнивает картинку на слабых
+        телефонах; 60 — полная скорость.</string>
+    <string name="gfx_letterbox">Сохранять пропорции 16:9 (полосы по краям)</string>
+    <string name="gfx_aniso">Анизотропная фильтрация</string>
+    <string name="gfx_aniso_default">По умолчанию</string>
+    <string name="gfx_restart_note">Применится при следующем запуске игры.</string>
+
+    <!-- On-device ISO install -->
+    <string name="setup_install_iso">Установить из ISO…</string>
+    <string name="setup_install_help">Выберите свой легально приобретённый ISO игры —
+        он будет извлечён прямо на телефоне (несколько минут и ~5 ГБ свободного
+        места).</string>
+    <string name="setup_extract_progress">Извлечение ISO… %1$s из ~%2$s</string>
+    <string name="setup_extract_preparing">Подготовка извлечения…</string>
+    <string name="setup_extract_failed">Ошибка извлечения: %1$s</string>
+    <string name="setup_extract_notiso">Выбранный файл не похож на ISO The Simpsons
+        Game (внутри нет default.xex).</string>
+    <string name="setup_extract_space">Недостаточно свободного места: нужно около %1$s,
+        доступно %2$s.</string>
+    <string name="setup_extract_done">Игра установлена из ISO.</string>
 </resources>

@@ -9,6 +9,7 @@
  * @modified    Tom Clay, 2026 - Adapted for ReXGlue runtime
  */
 
+#include <filesystem>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -22,6 +23,15 @@
 #include <rex/ui/vulkan/presenter.h>
 
 REXCVAR_DEFINE_BOOL(vulkan_log_debug_messages, true, "UI/Vulkan", "Log Vulkan debug messages");
+
+// Explicit Vulkan loader/driver library. Empty = the platform default
+// (libvulkan.so on Android, the system loader everywhere else). On Android
+// this selects a driver bundled inside the APK (e.g. a Mesa Turnip userspace
+// driver shipped as libvulkan.turnip.so): the loader .so exports the full
+// vk* surface, so pointing the instance at it routes the whole session
+// through that driver instead of the vendor one.
+REXCVAR_DEFINE_STRING(vulkan_loader_path, "", "UI/Vulkan",
+                      "Explicit Vulkan loader library path (empty = platform default)");
 
 namespace rex {
 namespace ui {
@@ -40,8 +50,12 @@ std::unique_ptr<VulkanInstance> VulkanInstance::Create(const bool with_surface,
   Functions& ifn = vulkan_instance->functions_;
 
   bool functions_loaded = true;
-  if (!vulkan_instance->loader_.Load(platform::lib_names::kVulkanLoader)) {
-    REXLOG_ERROR("Failed to load {}", platform::lib_names::kVulkanLoader);
+  const std::filesystem::path loader_path =
+      !REXCVAR_GET(vulkan_loader_path).empty()
+          ? std::filesystem::path(REXCVAR_GET(vulkan_loader_path))
+          : std::filesystem::path(platform::lib_names::kVulkanLoader);
+  if (!vulkan_instance->loader_.Load(loader_path)) {
+    REXLOG_ERROR("Failed to load {}", loader_path.string());
     return nullptr;
   }
 #define XE_VULKAN_LOAD_LOADER_FUNCTION(name) \

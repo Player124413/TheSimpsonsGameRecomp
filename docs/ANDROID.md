@@ -21,28 +21,60 @@ launch the app asks for the folder with your own extracted game files
 
 ```bash
 # once: install the Android SDK bits (see scripts/build-android.sh header)
-./scripts/build-android.sh            # debug APK
-./scripts/build-android.sh --release  # release (unsigned) APK
-./scripts/build-android.sh --install  # build + adb install
+./scripts/build-android.sh                     # debug APK
+./scripts/build-android.sh --release           # release APK (debug-signed)
+./scripts/build-android.sh --install           # build + adb install
+./scripts/build-android.sh --xex ~/default.xex # re-run codegen from your XEX
+./scripts/build-android.sh --turnip driver.zip # bundle a Turnip GPU driver
 ```
+
+`--xex` accepts a `default.xex` or a whole game **ISO** (it gets extracted on
+the way) and re-runs the ReXGlue codegen locally before the APK build, so the
+APK is compiled from *your* disc's freshly generated code — real PPC fences
+and page-granularity handling included. Requires the desktop build
+prerequisites (clang, ninja, and the dev packages the desktop CI installs).
+
+`--turnip` accepts a Turnip driver ZIP (any `libvulkan*.so` inside) or a bare
+`.so`, and packages it into the APK (see [GPU drivers](#gpu-drivers-turnip)).
 
 CI: `.github/workflows/build-android.yml` builds a debug APK on every push/PR
 and uploads it as an artifact — no game dump needed, everything compiles from
 the repository (vendored SDK + committed generated code).
+
+Manual workflow runs (Actions tab → *Android build* → *Run workflow*) accept:
+
+* **game_url** — a direct URL to your own `default.xex` or the game ISO. The
+  workflow extracts the XEX (if needed), builds the ReXGlue codegen CLI and
+  regenerates the recompiled code from your binary before building the APK.
+  Nothing game-related is published: the xex only ever lives inside that
+  private workflow run, and the resulting APK still requires your own game
+  data on the device.
+* **turnip_url** — a ZIP with an arm64 Turnip driver; it is bundled into the
+  APK as `libvulkan.turnip.so`.
+* **build_type** — `debug` or `release`.
 
 Toolchain pinned by Gradle: NDK `27.2.12479018`, CMake `3.31.1`, AGP `8.7.3`,
 JDK 17, `minSdk 28`, `targetSdk 35`, `arm64-v8a` only.
 
 ## First launch (onboarding)
 
-1. Copy the extracted game folder to the phone (e.g.
-   `Download/SimpsonsGame` with `default.xex` inside).
-2. Launch the app → **Choose game folder** → pick that folder.
-3. Grant "All files access" when asked (Android 11+): the app reads the folder
-   *in place* — nothing is copied or modified. On exotic storage providers
-   where no real path can be resolved, the app offers to copy the files into
-   its private storage instead.
-4. Press **Play**.
+Two ways to install the game data, both from **your own legally-owned copy**:
+
+1. **On the phone (no PC needed):** copy the game ISO anywhere into shared
+   storage (e.g. `Download/`), launch the app → **Install from ISO…** → pick
+   the ISO. The bundled `extract-xiso` (running natively in `libxiso.so`)
+   extracts it to `/storage/emulated/0/SimpsonsGame/gamedata` — a few minutes
+   and ~5 GB of free space. **That's the whole "drop the ISO and play" flow.**
+2. **Pre-extracted folder:** copy the extracted game folder to the phone
+   (e.g. `Download/SimpsonsGame` with `default.xex` inside) → **Choose game
+   folder** → pick it.
+
+Either way, grant "All files access" when asked (Android 11+): the app reads
+the folder *in place* — nothing is copied or modified. On exotic storage
+providers where no real path can be resolved, the folder flow offers to copy
+the files into private storage instead.
+
+Press **Play**.
 
 Logs are written to `/storage/emulated/0/SimpsonsGame/logs/simpsons.log`
 (shared storage, when the all-files grant is in place) or to the app's
@@ -82,6 +114,48 @@ rotations and on other devices.
 The editor toolbar sits top-center: `Done | − | + | eye`, with a hint line
 under it.
 
+## Graphics settings
+
+The gear button → **Graphics…** (or the Graphics button on the setup screen)
+opens the graphics dialog:
+
+| Setting | What it does |
+|---|---|
+| GPU driver | System (vendor) or the bundled Turnip driver, see below. |
+| VSync | Off also allows the tearing-capable present modes (`immediate`/`fifo_relaxed`) — uncapped frame rate at the cost of tearing. |
+| Internal resolution | `resolution_scale` 1x/2x/3x. 2x/3x render the 360 framebuffer larger and downscale — sharper, but only for flagship GPUs. |
+| Anti-aliasing | `swap_post_effect`: off / FXAA / FXAA (strong) — post-process AA on present. |
+| Frame limit | `video_mode_refresh_rate` 60 or 30 — 30 saves battery and stabilizes weaker phones. |
+| Letterbox | `present_letterbox` — keep 16:9 with bars (on) or stretch to fill the screen (off). |
+| Anisotropic filtering | `anisotropic_override` — texture sharpness at grazing angles. |
+
+Settings are translated into runtime cvar command-line tokens
+(`graphics_args.txt`, spliced into argv by `android_main.cpp` before
+`rex::cvar::Init`) and applied at the **next game start**, exactly like the
+desktop launcher (these configure swapchain/pipeline state built once at
+startup). Defaults emit no tokens at all — a default launch is
+argv-identical to a settings-free build.
+
+## GPU drivers (Turnip)
+
+Many Adreno GPUs run noticeably better (or at all, on older Qualcomm driver
+stacks) with **Turnip** — the open-source Mesa Freedreno Vulkan driver. The
+app supports bundling one into the APK:
+
+* Build with a driver: `scripts/build-android.sh --turnip <zip-or-so>`, or
+  pass `turnip_url` to the manual CI workflow. Any arm64 `libvulkan*.so`
+  inside the ZIP is packaged as `lib/arm64-v8a/libvulkan.turnip.so`.
+* In the app: Graphics → **GPU driver** → *Turnip (bundled)*. The option only
+  appears as selectable when a driver is actually packaged.
+* Technically, the runtime loads the driver through the `vulkan_loader_path`
+  cvar (see `vulkan_instance.cpp`): the whole Vulkan session — instance,
+  device, swapchain — is created through that library instead of the system
+  `libvulkan.so`.
+
+If the game fails to start with Turnip selected, switch back to *System* —
+a Turnip build that predates your GPU may be missing required extensions.
+Vendors' system drivers remain fully supported.
+
 ## Architecture notes
 
 ```
@@ -111,9 +185,11 @@ Key facts for maintainers:
 
 * **Libraries**: `libmain.so` (app entry, recompiled game code, app creator
   registration) + `librexruntime.so` (ReXGlue runtime incl. the Vulkan Xenos
-  backend) + `libc++_shared.so`. Windowing is SDL3 (statically linked into
-  the runtime), presenting through the activity's `ANativeWindow` via
-  `VK_KHR_android_surface`.
+  backend) + `libc++_shared.so` + `libxiso.so` (extract-xiso for on-device
+  ISO install, loaded only by SetupActivity). Windowing is SDL3 (statically
+  linked into the runtime), presenting through the activity's
+  `ANativeWindow` via `VK_KHR_android_surface`. A Turnip driver, when
+  bundled, ships as `libvulkan.turnip.so` in the same `lib/arm64-v8a/`.
 * **SDK Android support** lives in the vendored tree
   (`tools/rexglue-sdk`): JNI glue (`src/core/android_runtime.cpp`), bionic
   ucontext (`src/core/ucontext_android.cpp`), logcat sink, SDL window

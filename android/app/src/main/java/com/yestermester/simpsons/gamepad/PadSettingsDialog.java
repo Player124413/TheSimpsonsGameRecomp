@@ -80,6 +80,8 @@ public final class PadSettingsDialog {
         root.addView(edit);
         android.widget.Button reset = actionButton(context, R.string.pad_reset);
         root.addView(reset);
+        android.widget.Button graphics = actionButton(context, R.string.pad_open_graphics);
+        root.addView(graphics);
 
         final AlertDialog[] dialog = new AlertDialog[1];
 
@@ -116,6 +118,13 @@ public final class PadSettingsDialog {
                 })
                 .setNegativeButton(android.R.string.cancel, null)
                 .show());
+
+        graphics.setOnClickListener(v -> {
+            if (dialog[0] != null) {
+                dialog[0].dismiss();
+            }
+            com.yestermester.simpsons.GraphicsSettingsDialog.show(context);
+        });
 
         dialog[0] = new AlertDialog.Builder(context)
                 .setTitle(R.string.pad_settings_title)

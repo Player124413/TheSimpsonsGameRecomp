@@ -1,58 +1,193 @@
-name: Build Android APK
+name: Android build
 
-# Android (arm64-v8a) build of the recompiled game. Everything needed is in
-# the repository (vendored SDK + committed generated code), so no game dump
-# is required: the APK embeds the recompiled game code, and the player points
-# the app at their own extracted game folder on first launch (the game data
-# itself - default.xex and the bigfile archives - is never committed).
+# APK build for the Android port (arm64-v8a, Vulkan).
+#
+# Push/PR: quick sanity build (debug APK from the committed generated code).
+#
+# Manual (Actions tab -> Run workflow): optionally supply
+#   - game_url:   a direct URL to YOUR OWN default.xex or the game ISO. The
+#                 workflow then re-runs the ReXGlue codegen from that binary
+#                 (extracting the XEX from the ISO on the way, if needed) and
+#                 builds the APK with the freshly generated code - fences,
+#                 page-offset macros and all - instead of the committed tree.
+#   - turnip_url: a ZIP containing an arm64 Turnip (Mesa/Freedreno) driver
+#                 (any libvulkan*.so inside; it is packaged into the APK as
+#                 libvulkan.turnip.so and becomes selectable in Graphics).
+#   - build_type: debug or release.
+#
+# No game content is ever published: the xex is used only to compile the
+# recompiled code inside this private workflow run, and the resulting APK
+# still requires the player's own game data on the device.
 
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      game_url:
+        description: "URL to YOUR OWN default.xex or game ISO (optional; re-runs codegen)"
+        required: false
+        default: ""
+      turnip_url:
+        description: "URL to a Turnip driver ZIP (arm64 libvulkan*.so) to bundle (optional)"
+        required: false
+        default: ""
+      build_type:
+        description: "Build type"
+        type: choice
+        default: "debug"
+        options: [debug, release]
+
+env:
+  LLVM_VERSION: "20.1.8"
 
 jobs:
-  android-apk:
-    name: Android APK (arm64-v8a)
+  android:
+    name: Android arm64 APK
     runs-on: ubuntu-24.04
-    timeout-minutes: 150
-
+    env:
+      GAME_URL: ${{ inputs.game_url }}
+      TURNIP_URL: ${{ inputs.turnip_url }}
+      BUILD_TYPE: ${{ inputs.build_type || 'debug' }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Install JDK 17 (Temurin)
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
-      - name: Install SDK components (CMake 3.31.1)
+      - name: Set up Android SDK (platform 35, build-tools, platform-tools)
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages + CMake
         run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-35" "cmake;3.31.1" >/dev/null
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" \
+            "build-tools;35.0.0" "cmake;3.31.1" > /dev/null
 
-      - name: Gradle assembleDebug (arm64-v8a)
+      # ------------------------------------------------------------------
+      # Optional: game binary -> fresh codegen with ReXGlue
+      # ------------------------------------------------------------------
+      - name: Install host toolchain (clang-20 + dev libs for the codegen CLI)
+        if: env.GAME_URL != ''
         run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 20
+          sudo apt-get update
+          sudo apt-get install -y ninja-build pkg-config \
+            libgtk-3-dev libvulkan-dev \
+            libx11-xcb-dev libxcb1-dev libx11-dev libxext-dev libxrandr-dev \
+            libxcursor-dev libxi-dev libxfixes-dev libxss-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev \
+            libwayland-dev wayland-protocols libudev-dev \
+            libasound2-dev libpulse-dev libpipewire-0.3-dev
 
-      - name: Verify APK contents
+      - name: Fetch the game binary (XEX or ISO)
+        if: env.GAME_URL != ''
         run: |
-          APK=android/app/build/outputs/apk/debug/app-debug.apk
-          test -f "$APK" || { echo "APK missing"; exit 1; }
-          unzip -l "$APK" > /tmp/apk_contents.txt
-          cat /tmp/apk_contents.txt
-          grep -q "lib/arm64-v8a/libmain.so" /tmp/apk_contents.txt || {
-            echo "ERROR: libmain.so missing from APK"; exit 1; }
-          grep -q "lib/arm64-v8a/librexruntime.so" /tmp/apk_contents.txt || {
-            echo "ERROR: librexruntime.so missing from APK - the runtime would fail to load"; exit 1; }
-          echo "OK: game library and runtime are packaged."
+          set -euo pipefail
+          curl -fL --retry 3 --retry-delay 5 -o /tmp/gamefile "$GAME_URL"
+          ls -lh /tmp/gamefile
+          mkdir -p extracted
+          # XEX images start with the literal magic "XEX" (XEX0/1/2).
+          if head -c 3 /tmp/gamefile | grep -q '^XEX$'; then
+            echo "::group::Detected a raw XEX"
+            cp /tmp/gamefile extracted/default.xex
+            echo "::endgroup::"
+          else
+            echo "::group::Detected an ISO - extracting default.xex (full disc)"
+            cmake -S tools/extract-xiso -B tools/extract-xiso/build -G Ninja \
+              -DCMAKE_C_COMPILER=clang-20
+            cmake --build tools/extract-xiso/build
+            tools/extract-xiso/build/extract-xiso -x -d extracted /tmp/gamefile
+            echo "::endgroup::"
+          fi
+          test -f extracted/default.xex || {
+            echo "default.xex not found after extraction - not a Simpsons Game disc?"
+            exit 1
+          }
+          ls -lh extracted/default.xex
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+      - name: Build the ReXGlue codegen CLI (host)
+        if: env.GAME_URL != ''
+        run: |
+          set -euo pipefail
+          cmake -S tools/rexglue-sdk -B tools/rexglue-sdk/out/host -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20
+          cmake --build tools/rexglue-sdk/out/host --target rexglue
+
+      - name: Re-run codegen from the supplied XEX
+        if: env.GAME_URL != ''
+        run: |
+          set -euo pipefail
+          cd simpsons
+          ../tools/rexglue-sdk/out/host/rexglue -f codegen simpsons_manifest.toml
+          test -f generated/default/sources.cmake
+          echo "Regenerated translation units:"
+          find generated/default -name '*.cpp' | wc -l
+
+      # ------------------------------------------------------------------
+      # Optional: bundle a Turnip driver
+      # ------------------------------------------------------------------
+      - name: Fetch and install the Turnip driver into jniLibs
+        if: env.TURNIP_URL != ''
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 --retry-delay 5 -o /tmp/turnip.zip "$TURNIP_URL"
+          rm -rf /tmp/turnip && mkdir -p /tmp/turnip
+          unzip -q -o /tmp/turnip.zip -d /tmp/turnip
+          # Accept the usual layouts: arm64-v8a/libvulkan*.so, lib/arm64...,
+          # or a flat libvulkan_freedreno/turnip .so.
+          SO="$(find /tmp/turnip -name 'libvulkan*.so' -path '*arm64*' | head -n 1)"
+          if [ -z "$SO" ]; then
+            SO="$(find /tmp/turnip -name 'libvulkan*.so' | head -n 1)"
+          fi
+          test -n "$SO" || { echo "No libvulkan*.so inside the Turnip ZIP"; exit 1; }
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+          cp "$SO" android/app/src/main/jniLibs/arm64-v8a/libvulkan.turnip.so
+          ls -lh android/app/src/main/jniLibs/arm64-v8a/
+
+      # ------------------------------------------------------------------
+      # APK
+      # ------------------------------------------------------------------
+      - name: Gradle assemble (${{ env.BUILD_TYPE }})
+        working-directory: android
+        run: |
+          set -euo pipefail
+          test -x ./gradlew
+          test -f ../simpsons/generated/default/sources.cmake
+          test -f ../tools/rexglue-sdk/CMakeLists.txt
+          ./gradlew --no-daemon "assemble$(tr '[:lower:]' '[:upper:]' <<< "${BUILD_TYPE:0:1}")${BUILD_TYPE:1}"
+
+      - name: Verify the APK contents
+        run: |
+          set -euo pipefail
+          APK="$(find android/app/build/outputs/apk -name '*.apk' | head -n 1)"
+          test -n "$APK" && ls -lh "$APK"
+          unzip -l "$APK" > /tmp/apk-list.txt
+          for lib in libmain.so librexruntime.so libc++_shared.so libxiso.so; do
+            grep -q "lib/arm64-v8a/$lib" /tmp/apk-list.txt || {
+              echo "APK is missing $lib"; exit 1
+            }
+          done
+          if [ -n "$TURNIP_URL" ]; then
+            grep -q "lib/arm64-v8a/libvulkan.turnip.so" /tmp/apk-list.txt || {
+              echo "APK is missing the bundled Turnip driver"; exit 1
+            }
+          fi
+          echo "APK contents verified:"
+          grep "lib/arm64-v8a" /tmp/apk-list.txt
+
+      - uses: actions/upload-artifact@v4
         with:
-          name: simpsons-android-arm64-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: simpsons-android-arm64-${{ env.BUILD_TYPE }}
+          path: android/app/build/outputs/apk/**/*.apk
           if-no-files-found: error

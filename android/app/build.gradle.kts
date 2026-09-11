@@ -11,8 +11,8 @@ android {
         applicationId = "com.yestermester.simpsons"
         minSdk = 28
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
 
         // arm64-v8a only: the recompiled guest code, NEON paths and the
         // Vulkan backend are arm64-first; 32-bit devices are not supported
@@ -44,6 +44,11 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Sign release APKs with the debug key: these builds are shared
+            // directly (CI artifacts / scripts/build-android.sh --release),
+            // not through a store, and an unsigned APK cannot be installed at
+            // all. Players who want their own key can replace it locally.
+            signingConfig = signingConfigs.getByName("debug")
         }
         debug {
             // Keep symbols useful for tombstone triage.

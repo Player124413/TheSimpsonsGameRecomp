@@ -33,6 +33,10 @@ public class MainActivity extends SDLActivity {
             finish();
             return;
         }
+        // Graphics/driver cvar overrides must be on disk before the SDL
+        // activity spins up the native thread - it reads graphics_args.txt
+        // while building argv (see android_main.cpp).
+        GraphicsSettings.writeLaunchArgs(this);
         super.onCreate(savedInstanceState);
         // The virtual gamepad rides ON TOP of the SDL surface as a sibling
         // view and consumes the full gesture stream (the game reads a

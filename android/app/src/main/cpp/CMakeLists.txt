@@ -124,3 +124,28 @@ set_target_properties(main PROPERTIES
     CXX_VISIBILITY_PRESET default
     VISIBILITY_INLINES_HIDDEN OFF
 )
+
+#--- On-device ISO installer -----------------------------------------------------
+# extract-xiso (the desktop launcher's install backend) compiled for Android
+# with its CLI entry point renamed, plus a JNI wrapper (SetupActivity's
+# "Install from ISO" flow). A separate tiny .so: it shares nothing with the
+# game runtime and stays out of libmain.so's link graph.
+set(XISO_C "${REX_PROJECT_ROOT}/tools/extract-xiso/extract-xiso.c")
+if(NOT EXISTS "${XISO_C}")
+    message(FATAL_ERROR "extract-xiso source not found: ${XISO_C}")
+endif()
+add_library(xiso SHARED
+    xiso_jni.cpp
+    "${XISO_C}"
+)
+# Rename ONLY the C file's main(): the preprocessor token replace must not
+# touch the C++ wrapper. __LINUX__ selects extract-xiso's Linux branch: the
+# tool's own CMakeLists derives it from CMAKE_SYSTEM_NAME (which would give
+# the nonexistent __ANDROID__ branch -> #error), and bionic provides every
+# symbol that branch needs (lseek64/stat64/off64_t/O_LARGEFILE/asprintf via
+# the file's own _GNU_SOURCE). __ANDROID__ comes from the NDK automatically.
+set_source_files_properties("${XISO_C}" PROPERTIES
+    COMPILE_DEFINITIONS "main=extract_xiso_main;__LINUX__"
+)
+# Mixed C + C++ sources: CMake picks the C++ linker, so the JNI wrapper gets
+# libc++_shared like every other target. extract-xiso itself needs only libc.

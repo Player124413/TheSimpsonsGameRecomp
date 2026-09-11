@@ -201,6 +201,26 @@ int RunAndroidApp(int argc, char** argv) {
   // debugging GPU/CPU memory coherency issues.
   args.emplace_back("--clear_memory_page_state=false");
 
+  // Graphics settings (written by GraphicsSettings.writeLaunchArgs from Java):
+  // one "--cvar=value" token per line. The cvar parser ignores anything it
+  // does not recognize, so stale settings from an older app build are inert.
+  // Hard limits guard against a corrupted file turning into argv garbage.
+  {
+    std::ifstream gfx(external_dir + "/graphics_args.txt");
+    std::string line;
+    int appended = 0;
+    while (std::getline(gfx, line) && appended < 64) {
+      while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) {
+        line.pop_back();
+      }
+      if (line.empty() || line.size() > 256 || line.rfind("--", 0) != 0) {
+        continue;
+      }
+      args.push_back(std::move(line));
+      ++appended;
+    }
+  }
+
   std::vector<char*> argv_ptrs;
   argv_ptrs.reserve(args.size());
   for (auto& arg : args) {

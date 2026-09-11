@@ -26,6 +26,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Onboarding: pick the folder with the extracted Xbox 360 game files
@@ -50,16 +52,29 @@ public class SetupActivity extends Activity {
 
     private static final int REQUEST_PICK_TREE = 1001;
     private static final int REQUEST_READ_PERMISSION = 1002;
+    private static final int REQUEST_PICK_ISO = 1003;
+
+    static {
+        // On-device ISO extraction (tools/extract-xiso compiled for Android).
+        System.loadLibrary("xiso");
+    }
+
+    /** Blocking extraction entry point; returns the tool's exit code (0 = ok). */
+    private static native int nativeExtractIso(String isoPath, String destDir);
 
     /** What to do when we come back from the system settings/permission UI. */
     private static final int RESUME_NONE = 0;
     private static final int RESUME_PICK_FOLDER = 1;
+    private static final int RESUME_PICK_ISO = 2;
 
     private TextView statusText;
     private ProgressBar progress;
     private Button pickButton;
     private Button playButton;
+    private Button isoButton;
     private int resumeAction = RESUME_NONE;
+    /** True while an ISO extraction is running (guards the progress poller). */
+    private final AtomicBoolean extracting = new AtomicBoolean(false);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -107,6 +122,18 @@ public class SetupActivity extends Activity {
         resetButton.setOnClickListener(v -> resetConfig());
         root.addView(resetButton);
 
+        // Install straight from the player's own ISO, entirely on-device
+        // (extract-xiso runs natively in libxiso.so).
+        isoButton = new Button(this);
+        isoButton.setText(R.string.setup_install_iso);
+        isoButton.setOnClickListener(v -> onInstallIsoClicked());
+        root.addView(isoButton);
+
+        Button gfxButton = new Button(this);
+        gfxButton.setText(R.string.gfx_title);
+        gfxButton.setOnClickListener(v -> GraphicsSettingsDialog.show(this));
+        root.addView(gfxButton);
+
         setContentView(root);
 
         // Configured: show the home state (Play). Launching is explicit so the
@@ -130,6 +157,9 @@ public class SetupActivity extends Activity {
             } else {
                 onPickClicked();
             }
+        } else if (resumeAction == RESUME_PICK_ISO) {
+            resumeAction = RESUME_NONE;
+            onInstallIsoClicked();
         }
     }
 
@@ -184,6 +214,210 @@ public class SetupActivity extends Activity {
         }
     }
 
+    // --- On-device ISO install ---------------------------------------------------
+
+    /**
+     * "Install from ISO": extracts the player's own ISO to shared storage
+     * using the bundled extract-xiso, entirely on the phone - no PC needed.
+     */
+    private void onInstallIsoClicked() {
+        if (extracting.get()) {
+            return; // Already running; the UI stays on the progress state.
+        }
+        if (Build.VERSION.SDK_INT >= 30 /* Android 11 */) {
+            if (!Environment.isExternalStorageManager()) {
+                setStatus(R.string.setup_status_allfiles);
+                resumeAction = RESUME_PICK_ISO;
+                try {
+                    startActivity(new Intent(
+                            Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                            Uri.fromParts("package", getPackageName(), null)));
+                } catch (ActivityNotFoundException e) {
+                    try {
+                        startActivity(new Intent(
+                                Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION));
+                    } catch (ActivityNotFoundException e2) {
+                        Toast.makeText(this, R.string.setup_status_error,
+                                Toast.LENGTH_LONG).show();
+                    }
+                }
+                return;
+            }
+        } else {
+            // Android 9/10: classic runtime permissions. READ covers picking
+            // a pre-extracted folder; WRITE is needed because the ISO install
+            // extracts the game to shared storage.
+            if (checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+                    != PackageManager.PERMISSION_GRANTED
+                    || checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    != PackageManager.PERMISSION_GRANTED) {
+                setStatus(R.string.setup_status_permission);
+                resumeAction = RESUME_PICK_ISO;
+                requestPermissions(
+                        new String[]{android.Manifest.permission.READ_EXTERNAL_STORAGE,
+                                android.Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                        REQUEST_READ_PERMISSION);
+                return;
+            }
+        }
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        try {
+            startActivityForResult(intent, REQUEST_PICK_ISO);
+        } catch (ActivityNotFoundException e) {
+            setStatus(getString(R.string.setup_status_error, e.getMessage()));
+        }
+    }
+
+    /** Resolves a picked document URI ("primary:Download/game.iso") to a real path. */
+    private String resolveDocumentRealPath(Uri documentUri) {
+        String docId;
+        try {
+            docId = DocumentsContract.getDocumentId(documentUri);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+        int colon = docId.indexOf(':');
+        if (colon <= 0) {
+            return null;
+        }
+        String volumeTag = docId.substring(0, colon);
+        String path = docId.substring(colon + 1);
+        if (path.isEmpty()) {
+            return null;
+        }
+        StorageManager sm = getSystemService(StorageManager.class);
+        if (sm == null) {
+            return null;
+        }
+        for (StorageVolume volume : sm.getStorageVolumes()) {
+            boolean matches = "primary".equals(volumeTag)
+                    ? volume.isPrimary()
+                    : volume.getUuid() != null && volumeTag.startsWith(volume.getUuid());
+            if (!matches) {
+                continue;
+            }
+            File dir = volumeDirectory(volume, volumeTag);
+            if (dir != null) {
+                File resolved = new File(dir, path);
+                if (resolved.isFile()) {
+                    return resolved.getAbsolutePath();
+                }
+            }
+        }
+        return null;
+    }
+
+    private void startIsoExtraction(File iso) {
+        final File gameRoot = new File(
+                Environment.getExternalStorageDirectory(), "SimpsonsGame");
+        final File extractingDir = new File(gameRoot, "gamedata_extracting");
+        final File finalDir = new File(gameRoot, "gamedata");
+
+        // Space check: the extracted tree is roughly the ISO's own size.
+        final long needed = (long) (iso.length() * 1.05);
+        final long usable = gameRoot.getUsableSpace();
+        // noinspection ResultOfMethodCallIgnored
+        gameRoot.mkdirs();
+        if (usable < needed) {
+            setStatus(getString(R.string.setup_extract_space,
+                    humanBytes(needed), humanBytes(usable)));
+            return;
+        }
+
+        deleteRecursive(extractingDir);
+        // noinspection ResultOfMethodCallIgnored
+        extractingDir.mkdirs();
+
+        extracting.set(true);
+        pickButton.setEnabled(false);
+        isoButton.setEnabled(false);
+        playButton.setEnabled(false);
+        progress.setVisibility(View.VISIBLE);
+        progress.setIndeterminate(false);
+        progress.setMax(100);
+        progress.setProgress(0);
+        setStatus(R.string.setup_extract_preparing);
+
+        final long totalBytes = iso.length();
+        final File isoFile = iso;
+
+        // Progress poller: sum the extracted tree every 800 ms (extract-xiso
+        // writes its progress text to logcat, which we cannot parse back).
+        final Thread poller = new Thread(() -> {
+            while (extracting.get()) {
+                final long done = dirSize(extractingDir);
+                final int pct = (int) Math.min(100, done * 100 / Math.max(1, totalBytes));
+                runOnUiThread(() -> {
+                    if (extracting.get()) {
+                        progress.setProgress(pct);
+                        setStatus(getString(R.string.setup_extract_progress,
+                                humanBytes(done), humanBytes(totalBytes)));
+                    }
+                });
+                try {
+                    Thread.sleep(800);
+                } catch (InterruptedException e) {
+                    return;
+                }
+            }
+        }, "iso-extract-poll");
+        poller.setDaemon(true);
+        poller.start();
+
+        new Thread(() -> {
+            final int exit = nativeExtractIso(isoFile.getAbsolutePath(),
+                    extractingDir.getAbsolutePath());
+            extracting.set(false);
+            runOnUiThread(() -> {
+                progress.setVisibility(View.GONE);
+                pickButton.setEnabled(true);
+                isoButton.setEnabled(true);
+                playButton.setEnabled(true);
+                if (exit == 0 && new File(extractingDir, "default.xex").isFile()) {
+                    if (finalDir.exists()) {
+                        deleteRecursive(finalDir);
+                    }
+                    if (extractingDir.renameTo(finalDir)) {
+                        setStatus(R.string.setup_extract_done);
+                        acceptGameRoot(finalDir.getAbsolutePath());
+                    } else {
+                        // Rename across the same volume should not fail; if it
+                        // somehow does, keep the extracting dir as the root.
+                        setStatus(R.string.setup_extract_done);
+                        acceptGameRoot(extractingDir.getAbsolutePath());
+                    }
+                } else {
+                    setStatus(getString(R.string.setup_extract_failed,
+                            "exit " + exit + " (see logcat)"));
+                }
+            });
+        }, "iso-extract").start();
+    }
+
+    private static long dirSize(File dir) {
+        long size = 0;
+        File[] children = dir.listFiles();
+        if (children != null) {
+            for (File c : children) {
+                size += c.isDirectory() ? dirSize(c) : c.length();
+            }
+        }
+        return size;
+    }
+
+    private static String humanBytes(long bytes) {
+        if (bytes < 1024 * 1024) {
+            return (bytes / 1024) + " KB";
+        }
+        double mb = bytes / (1024.0 * 1024.0);
+        if (mb < 1024) {
+            return String.format(Locale.US, "%.0f MB", mb);
+        }
+        return String.format(Locale.US, "%.2f GB", mb / 1024.0);
+    }
+
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions,
                                            int[] grantResults) {
@@ -196,6 +430,17 @@ public class SetupActivity extends Activity {
                 } else {
                     setStatus(R.string.setup_status_permission);
                 }
+            } else if (resumeAction == RESUME_PICK_ISO) {
+                resumeAction = RESUME_NONE;
+                boolean ok = grantResults.length > 0;
+                for (int r : grantResults) {
+                    ok = ok && r == PackageManager.PERMISSION_GRANTED;
+                }
+                if (ok) {
+                    onInstallIsoClicked();
+                } else {
+                    setStatus(R.string.setup_status_permission);
+                }
             }
         }
     }
@@ -203,6 +448,29 @@ public class SetupActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_PICK_ISO) {
+            if (resultCode != RESULT_OK || data == null || data.getData() == null) {
+                setStatus(R.string.setup_status_cancelled);
+                return;
+            }
+            Uri isoUri = data.getData();
+            String realPath = resolveDocumentRealPath(isoUri);
+            if (realPath == null) {
+                // No real path (SAF-only provider): extracting needs direct
+                // file access. Ask for the file on shared storage instead of
+                // copying gigabytes through content resolver streams.
+                setStatus(getString(R.string.setup_extract_failed,
+                        "no direct path - copy the ISO to Download/ and pick it again"));
+                return;
+            }
+            File iso = new File(realPath);
+            if (!iso.isFile() || iso.length() < 1024 * 1024) {
+                setStatus(R.string.setup_extract_notiso);
+                return;
+            }
+            startIsoExtraction(iso);
+            return;
+        }
         if (requestCode != REQUEST_PICK_TREE) {
             return;
         }
@@ -494,6 +762,9 @@ public class SetupActivity extends Activity {
             setStatus(R.string.setup_status_idle);
             return;
         }
+        // Refresh the graphics/driver cvar file so the freshly chosen settings
+        // are what the next game start uses.
+        GraphicsSettings.writeLaunchArgs(this);
         startActivity(new Intent(this, MainActivity.class));
     }
 
