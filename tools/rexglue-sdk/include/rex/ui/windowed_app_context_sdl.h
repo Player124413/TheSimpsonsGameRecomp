@@ -61,4 +61,5 @@ class SDLWindowedAppContext final : public WindowedAppContext {
   bool event_watch_registered_ = false;
 };
 
-}  // namespace rex::ui
+}  // namespace ui
+}  // namespace rex

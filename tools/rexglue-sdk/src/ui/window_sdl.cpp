@@ -403,4 +403,5 @@ void WindowSDL::HandleMouseEvent(SDL_Event& event) {
   }
 }
 
-}  // namespace rex::ui
+}  // namespace ui
+}  // namespace rex

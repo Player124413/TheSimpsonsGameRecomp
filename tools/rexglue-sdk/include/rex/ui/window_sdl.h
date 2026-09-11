@@ -82,4 +82,5 @@ class WindowSDL final : public Window {
   SDL_TimerID cursor_hide_timer_ = 0;
 };
 
-}  // namespace rex::ui
+}  // namespace ui
+}  // namespace rex

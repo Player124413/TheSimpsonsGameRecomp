@@ -161,4 +161,5 @@ void SDLWindowedAppContext::ProcessQuitRequest() {
   }
 }
 
-}  // namespace rex::ui
+}  // namespace ui
+}  // namespace rex
