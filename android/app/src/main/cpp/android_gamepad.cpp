@@ -37,6 +37,7 @@
 #include <jni.h>
 
 #include <algorithm>
+#include <cmath>
 #include <mutex>
 
 #include <rex/logging.h>
@@ -116,7 +117,8 @@ bool EnsureVirtualPadAttached() {
   return AttachLocked();
 }
 
-}  // namespace simpsons::gamepad
+}  // namespace gamepad
+}  // namespace simpsons
 
 // ---------------------------------------------------------------------------
 // JNI entry points (called from the UI thread by the Java overlay)
