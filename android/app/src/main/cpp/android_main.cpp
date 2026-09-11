@@ -33,6 +33,7 @@
 
 #include "android_gamepad.h"
 #include <rex/cvar.h>
+#include <rex/filesystem.h>
 #include <rex/logging.h>
 #include <rex/main_android.h>
 #include <rex/memory.h>
