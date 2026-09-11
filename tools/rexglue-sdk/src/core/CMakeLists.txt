@@ -62,6 +62,15 @@ elseif(UNIX)
         system_posix.cpp
         threading_posix.cpp
     )
+    if(ANDROID)
+        # Android glue: GetAndroidApiLevel, JNI context plumbing, ContentResolver
+        # fd bridge and the AndroidInitialize/Shutdown hook implementations.
+        # Body is fully guarded by REX_PLATFORM_ANDROID (no-op elsewhere).
+        target_sources(rexcore PRIVATE android_runtime.cpp)
+        # Bionic has ucontext_t but not the ucontext API functions; provide
+        # them (aarch64 assembly) so fiber_posix.cpp works unmodified.
+        target_sources(rexcore PRIVATE ucontext_android.cpp)
+    endif()
 endif()
 
 target_include_directories(rexcore PUBLIC
@@ -75,7 +84,11 @@ target_include_directories(rexcore PRIVATE
     ${PROJECT_SOURCE_DIR}/thirdparty/cli11/include
 )
 
-if(UNIX)
+if(ANDROID)
+    # bionic: pthread lives in libc and there is no librt. dl is a real
+    # (stub-capable) library; log is needed by the Android glue code.
+    target_link_libraries(rexcore PRIVATE dl log)
+elseif(UNIX)
     target_link_libraries(rexcore PRIVATE pthread rt dl)
 endif()
 

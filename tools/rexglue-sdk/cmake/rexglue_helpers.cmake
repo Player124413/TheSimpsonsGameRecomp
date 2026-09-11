@@ -14,7 +14,11 @@
 # runtime DLL staging is the host's job (see rexglue_configure_target).
 #==========================================================
 function(rexglue_apply_target_settings target_name)
-    if(UNIX AND NOT APPLE)
+    if(ANDROID)
+        # Android: no GTK (windowing is SDL3, wired by the app's own main);
+        # armv8-a baseline runs on every 64-bit device.
+        target_compile_options(${target_name} PRIVATE -march=armv8-a)
+    elseif(UNIX AND NOT APPLE)
         find_package(PkgConfig REQUIRED)
         pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
         target_include_directories(${target_name} PRIVATE ${GTK3_INCLUDE_DIRS})
@@ -60,7 +64,10 @@ endfunction()
 #     so this single copy handles them transitively.
 #==========================================================
 function(rexglue_configure_target target_name)
-    if(WIN32)
+    if(ANDROID)
+        # Android: the app library provides its own entry point
+        # (SDL_main via the SDL activity); do not add a desktop main().
+    elseif(WIN32)
         target_sources(${target_name} PRIVATE
             ${REXGLUE_SHARE_DIR}/windowed_app_main_win.cpp)
     else()

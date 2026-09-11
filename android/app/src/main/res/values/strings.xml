@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">The Simpsons Game</string>
+
+    <!-- Onboarding / setup -->
+    <string name="setup_title">Game data setup</string>
+    <string name="setup_help">Copy the game files you extracted from YOUR OWN
+        legally-owned Xbox 360 copy of The Simpsons Game onto the phone (for
+        example into Download/SimpsonsGame), then pick that folder below.\n\nThe
+        folder must contain default.xex and the game\'s data files (about 4 GB).\n\nOn
+        PC: run the desktop launcher, use its Install tab with your ISO, then
+        copy the installed game folder to the phone.</string>
+    <string name="setup_pick">Choose game folder</string>
+    <string name="setup_play">Play</string>
+    <string name="setup_reset">Reset configuration</string>
+    <string name="setup_status_idle">Game data is not configured yet.</string>
+    <string name="setup_status_ready">Game data found. Ready to play!</string>
+    <string name="setup_status_copying">Copying the game into app storage… %1$d%%</string>
+    <string name="setup_status_allfiles">All-files access is required to read the
+        folder in place. Grant it in the system settings screen that just
+        opened, then come back and pick the folder again.</string>
+    <string name="setup_status_permission">Storage permission is required to read
+        the game folder. Grant it, then pick the folder again.</string>
+    <string name="setup_status_notfound">The picked folder does not contain
+        default.xex. Make sure you copied the extracted game data (not the ISO
+        itself).</string>
+    <string name="setup_status_copied">Game copied into app storage.</string>
+    <string name="setup_status_cancelled">Folder selection cancelled.</string>
+    <string name="setup_status_error">Something went wrong: %1$s</string>
+    <string name="setup_confirm_reset">Reset the saved game folder? You will
+        need to pick it again.</string>
+    <string name="setup_confirm_reset_layout">Reset all button positions, sizes and visibility to defaults?</string>
+
+    <!-- Touch gamepad -->
+    <string name="pad_settings_title">Touch controls</string>
+    <string name="pad_enabled">On-screen gamepad enabled</string>
+    <string name="pad_enabled_hint">Disable to play with a physical
+        (Bluetooth/USB) controller only.</string>
+    <string name="pad_size">Button size</string>
+    <string name="pad_opacity">Opacity</string>
+    <string name="pad_edit">Edit layout</string>
+    <string name="pad_reset">Reset layout</string>
+    <string name="pad_edit_hint">Drag buttons to move them. Select a button and
+        use +/− to resize it. Tap the eye to hide or show a button. All
+        changes are saved automatically.</string>
+    <string name="pad_edit_done">Done</string>
+    <string name="pad_edit_exit">Exit editing</string>
+</resources>

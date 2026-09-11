@@ -26,16 +26,32 @@
 #include <rex/platform.h>
 #include <rex/string.h>
 
+#include <algorithm>
+#include <mutex>
+#include <vector>
+
 #if REX_PLATFORM_ANDROID
 #include <string.h>
 
 #include <dlfcn.h>
 #include <sys/ioctl.h>
 
+#if __has_include(<linux/ashmem.h>)
 #include <linux/ashmem.h>
+#else
+// The NDK sysroot may not ship linux/ashmem.h. Define the bits used by the
+// pre-API-26 /dev/ashmem fallback below (dead code at the Android port's
+// minSdk 28 - ASharedMemory_create is used on API 26+ - but it must compile).
+// Values mirror the kernel's uapi/linux/ashmem.h.
+#include <linux/ioctl.h>
+#define ASHMEM_NAME_LEN 256
+#define ASHMEM_NAME_DEF "dev/ashmem"
+#define ASHMEM_IOC 0x77
+#define ASHMEM_SET_NAME _IOW(ASHMEM_IOC, 1, char[ASHMEM_NAME_LEN])
+#define ASHMEM_SET_SIZE _IOW(ASHMEM_IOC, 3, size_t)
+#endif
 
-// TODO(tomc): Android or maybe na. idk
-// #include "xenia/base/main_android.h"
+#include <rex/main_android.h>  // rex::GetAndroidApiLevel (AndroidInitialize)
 #endif
 
 namespace rex {
@@ -134,23 +150,59 @@ static bool ParseProcMapsLine(const std::string& line, LinuxMapEntry& out) {
   return out.start < out.end;
 }
 
-// Find the mapping entry in /proc/self/maps that contains the given address
+// Cached /proc/self/maps snapshot for the exception fast path.
+//
+// The write-watch fault handler queries the current protection of guest arena
+// pages on every fault (mmio_handler.cpp). Parsing /proc/self/maps regenerates
+// the seq_file text of every VMA in the process (hundreds of VMAs under a
+// Vulkan driver), which costs 50 us to >1 ms per fault - all while holding the
+// global critical region, and potentially dozens of thousands of times per
+// session on a phone.
+//
+// Every protection change to guest arena pages flows through the mutating
+// functions below (AllocFixed / DeallocFixed / Protect), which invalidate the
+// snapshot, so the cache is always fresh for the addresses the fault path
+// queries. External (non-arena) mappings mutated by other components are never
+// the subject of fault-path queries, and a fault itself proves the page is not
+// writable, so a stale entry cannot skip a legitimate write-watch fixup.
+struct LinuxMapsCache {
+  std::mutex mutex;
+  std::vector<LinuxMapEntry> entries;
+  bool valid = false;
+};
+
+static LinuxMapsCache g_linux_maps_cache;
+
+// Find the mapping entry for the given address using (and lazily populating)
+// the cached, sorted maps snapshot.
 static bool FindEntryForAddress(void* address, LinuxMapEntry& out_entry) {
   const uintptr_t addr = reinterpret_cast<uintptr_t>(address);
-  std::ifstream maps("/proc/self/maps");
-  if (!maps.is_open())
-    return false;
-  std::string line;
-  while (std::getline(maps, line)) {
-    LinuxMapEntry e;
-    if (!ParseProcMapsLine(line, e))
-      continue;
-    if (addr >= e.start && addr < e.end) {
-      out_entry = e;
-      return true;
+  std::lock_guard<std::mutex> lock(g_linux_maps_cache.mutex);
+  if (!g_linux_maps_cache.valid) {
+    g_linux_maps_cache.entries.clear();
+    std::ifstream maps("/proc/self/maps");
+    if (!maps.is_open()) {
+      return false;
     }
+    std::string line;
+    while (std::getline(maps, line)) {
+      LinuxMapEntry e;
+      if (ParseProcMapsLine(line, e)) {
+        g_linux_maps_cache.entries.push_back(e);
+      }
+    }
+    std::sort(g_linux_maps_cache.entries.begin(), g_linux_maps_cache.entries.end(),
+              [](const LinuxMapEntry& a, const LinuxMapEntry& b) { return a.start < b.start; });
+    g_linux_maps_cache.valid = true;
   }
-  return false;
+  const auto it = std::lower_bound(
+      g_linux_maps_cache.entries.begin(), g_linux_maps_cache.entries.end(), addr,
+      [](const LinuxMapEntry& e, uintptr_t value) { return e.end <= value; });
+  if (it == g_linux_maps_cache.entries.end() || addr < it->start) {
+    return false;
+  }
+  out_entry = *it;
+  return true;
 }
 
 // Check if [base, base+length) is fully covered by existing mappings (no gaps)
@@ -201,8 +253,22 @@ static PageAccess PermsToPageAccess(const char perms[5]) {
 }  // namespace
 #endif  // REX_PLATFORM_LINUX
 
+// Drop the cached /proc/self/maps snapshot (no-op on non-Linux platforms).
+// Called by every function in this file that mutates page mappings, so the
+// fault-path QueryProtect always observes the current protection state.
+static void InvalidateLinuxMapsCache() {
+#if REX_PLATFORM_LINUX
+  std::lock_guard<std::mutex> lock(g_linux_maps_cache.mutex);
+  g_linux_maps_cache.valid = false;
+#endif  // REX_PLATFORM_LINUX
+}
+
 void* AllocFixed(void* base_address, size_t length, AllocationType allocation_type,
                  PageAccess access) {
+  // This function mutates page mappings; drop the cached /proc/self/maps
+  // snapshot used by the fault-path QueryProtect before (and after) mutating.
+  InvalidateLinuxMapsCache();
+
   // Emulates Windows VirtualAlloc behavior:
   // - Reserve: create PROT_NONE mapping to hold address space
   // - Commit on existing reservation: mprotect to enable access (EEXIST path)
@@ -236,6 +302,7 @@ void* AllocFixed(void* base_address, size_t length, AllocationType allocation_ty
 
   void* result = mmap(base_address, length, prot_initial, flags, -1, 0);
   if (result != MAP_FAILED) {
+    InvalidateLinuxMapsCache();
     return result;
   }
 #if defined(MAP_FIXED_NOREPLACE) && REX_PLATFORM_LINUX
@@ -247,6 +314,7 @@ void* AllocFixed(void* base_address, size_t length, AllocationType allocation_ty
     // Verify the entire range is mapped before using mprotect
     if (IsRangeFullyMapped(base_address, length)) {
       if (mprotect(base_address, length, static_cast<int>(prot_requested)) == 0) {
+        InvalidateLinuxMapsCache();
         return base_address;
       }
     }
@@ -266,10 +334,15 @@ bool DeallocFixed(void* base_address, size_t length, DeallocationType deallocati
 #if defined(MADV_DONTNEED)
       (void)madvise(base_address, length, MADV_DONTNEED);
 #endif
+      InvalidateLinuxMapsCache();
       return true;
     }
     case DeallocationType::kRelease: {
-      return munmap(base_address, length) == 0;
+      const bool released = munmap(base_address, length) == 0;
+      if (released) {
+        InvalidateLinuxMapsCache();
+      }
+      return released;
     }
     default:
       // how we get here? :(
@@ -298,7 +371,11 @@ bool Protect(void* base_address, size_t length, PageAccess access, PageAccess* o
 #endif
 
   uint32_t prot = ToPosixProtectFlags(access);
-  return mprotect(base_address, length, prot) == 0;
+  const bool ret = mprotect(base_address, length, prot) == 0;
+  if (ret) {
+    InvalidateLinuxMapsCache();
+  }
+  return ret;
 }
 
 bool QueryProtect(void* base_address, size_t& length, PageAccess& access_out) {

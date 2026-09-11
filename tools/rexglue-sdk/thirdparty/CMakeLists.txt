@@ -239,35 +239,65 @@ set(SDL_INSTALL ON CACHE BOOL "" FORCE)
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL_STATIC ON CACHE BOOL "" FORCE)
 set(SDL_TEST OFF CACHE BOOL "" FORCE)
-set(SDL_UNIX_CONSOLE_BUILD ON CACHE BOOL "" FORCE)
 
-# Disable unused subsystems
-set(SDL_VIDEO OFF CACHE BOOL "" FORCE)
-set(SDL_RENDER OFF CACHE BOOL "" FORCE)
-set(SDL_HAPTIC OFF CACHE BOOL "" FORCE)
-set(SDL_SENSOR OFF CACHE BOOL "" FORCE)
-set(SDL_POWER OFF CACHE BOOL "" FORCE)
-set(SDL_FILESYSTEM OFF CACHE BOOL "" FORCE)
-set(SDL_LOCALE OFF CACHE BOOL "" FORCE)
-set(SDL_FILE OFF CACHE BOOL "" FORCE)
-set(SDL_MISC OFF CACHE BOOL "" FORCE)
-set(SDL_DIALOG OFF CACHE BOOL "" FORCE)
-set(SDL_TRAY OFF CACHE BOOL "" FORCE)
-set(SDL_CAMERA OFF CACHE BOOL "" FORCE)
+if(ANDROID)
+    # Android: the window/SurfaceView lifecycle is driven by SDLActivity (the
+    # Java glue copied into the app), so SDL's video subsystem must be built
+    # (the "android" video driver is selected automatically). Audio uses
+    # AAudio/OpenSL through SDL's own android driver selection. Presentation
+    # creates its own VK_KHR_android_surface from the ANativeWindow, so the
+    # SDL Vulkan integration is not strictly required, but keeping it on lets
+    # SDL query APIs work and costs nothing.
+    set(SDL_VIDEO ON CACHE BOOL "" FORCE)
+    set(SDL_VULKAN ON CACHE BOOL "" FORCE)
+    set(SDL_OPENGLES OFF CACHE BOOL "" FORCE)
+    set(SDL_RENDER OFF CACHE BOOL "" FORCE)
+    set(SDL_HAPTIC OFF CACHE BOOL "" FORCE)
+    set(SDL_SENSOR OFF CACHE BOOL "" FORCE)
+    set(SDL_POWER OFF CACHE BOOL "" FORCE)
+    set(SDL_FILESYSTEM OFF CACHE BOOL "" FORCE)
+    set(SDL_LOCALE OFF CACHE BOOL "" FORCE)
+    set(SDL_FILE OFF CACHE BOOL "" FORCE)
+    set(SDL_MISC OFF CACHE BOOL "" FORCE)
+    set(SDL_DIALOG OFF CACHE BOOL "" FORCE)
+    set(SDL_TRAY OFF CACHE BOOL "" FORCE)
+    set(SDL_CAMERA OFF CACHE BOOL "" FORCE)
+    set(SDL_OPENGL OFF CACHE BOOL "" FORCE)
+    set(SDL_METAL OFF CACHE BOOL "" FORCE)
+    set(SDL_DISKAUDIO OFF CACHE BOOL "" FORCE)
+    set(SDL_DUMMYAUDIO OFF CACHE BOOL "" FORCE)
+    set(SDL_DUMMYVIDEO OFF CACHE BOOL "" FORCE)
+else()
+    set(SDL_UNIX_CONSOLE_BUILD ON CACHE BOOL "" FORCE)
 
-# Disable graphics APIs (unused without video)
-set(SDL_OPENGL OFF CACHE BOOL "" FORCE)
-set(SDL_OPENGLES OFF CACHE BOOL "" FORCE)
-set(SDL_VULKAN OFF CACHE BOOL "" FORCE)
-set(SDL_METAL OFF CACHE BOOL "" FORCE)
+    # Disable unused subsystems
+    set(SDL_VIDEO OFF CACHE BOOL "" FORCE)
+    set(SDL_RENDER OFF CACHE BOOL "" FORCE)
+    set(SDL_HAPTIC OFF CACHE BOOL "" FORCE)
+    set(SDL_SENSOR OFF CACHE BOOL "" FORCE)
+    set(SDL_POWER OFF CACHE BOOL "" FORCE)
+    set(SDL_FILESYSTEM OFF CACHE BOOL "" FORCE)
+    set(SDL_LOCALE OFF CACHE BOOL "" FORCE)
+    set(SDL_FILE OFF CACHE BOOL "" FORCE)
+    set(SDL_MISC OFF CACHE BOOL "" FORCE)
+    set(SDL_DIALOG OFF CACHE BOOL "" FORCE)
+    set(SDL_TRAY OFF CACHE BOOL "" FORCE)
+    set(SDL_CAMERA OFF CACHE BOOL "" FORCE)
 
-# Disable dummy drivers
-set(SDL_DISKAUDIO OFF CACHE BOOL "" FORCE)
-set(SDL_DUMMYAUDIO OFF CACHE BOOL "" FORCE)
-set(SDL_DUMMYVIDEO OFF CACHE BOOL "" FORCE)
+    # Disable graphics APIs (unused without video)
+    set(SDL_OPENGL OFF CACHE BOOL "" FORCE)
+    set(SDL_OPENGLES OFF CACHE BOOL "" FORCE)
+    set(SDL_VULKAN OFF CACHE BOOL "" FORCE)
+    set(SDL_METAL OFF CACHE BOOL "" FORCE)
+
+    # Disable dummy drivers
+    set(SDL_DISKAUDIO OFF CACHE BOOL "" FORCE)
+    set(SDL_DUMMYAUDIO OFF CACHE BOOL "" FORCE)
+    set(SDL_DUMMYVIDEO OFF CACHE BOOL "" FORCE)
+endif()
 
 # Linux audio backends
-if(UNIX AND NOT APPLE)
+if(UNIX AND NOT APPLE AND NOT ANDROID)
     set(SDL_ALSA              ON  CACHE BOOL "" FORCE)
     set(SDL_ALSA_SHARED       ON  CACHE BOOL "" FORCE)
     set(SDL_PULSEAUDIO        ON  CACHE BOOL "" FORCE)
@@ -394,6 +424,10 @@ set(FFMPEG_DIR "${CMAKE_CURRENT_SOURCE_DIR}/FFmpeg")
 # the FFmpeg targets' include paths below (BEFORE the FFmpeg source dir).
 if(WIN32)
     set(_ff_os windows)
+elseif(ANDROID)
+    # Bionic differs from glibc in config-detected libc features; a dedicated
+    # config header (config_android_aarch64.h) is committed for it.
+    set(_ff_os android)
 elseif(APPLE)
     set(_ff_os macos)
 else()
