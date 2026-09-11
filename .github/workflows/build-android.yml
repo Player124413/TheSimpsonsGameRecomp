@@ -89,7 +89,29 @@ jobs:
           test -x ./gradlew
           test -f ../simpsons/generated/default/sources.cmake
           test -f ../tools/rexglue-sdk/CMakeLists.txt
-          ./gradlew --no-daemon "assemble$(tr '[:lower:]' '[:upper:]' <<< "${BUILD_TYPE:0:1}")${BUILD_TYPE:1}"
+          ./gradlew --no-daemon "assemble$(tr '[:lower:]' '[:upper:]' <<< "${BUILD_TYPE:0:1}")${BUILD_TYPE:1}" 2>&1 | tee /tmp/gradle.log
+
+      # The sandbox/tooling some of us use cannot reach the Actions log
+      # storage; surface the actual compiler/cmake errors as run annotations
+      # (served by api.github.com) so they are reachable everywhere.
+      - name: Surface build errors as annotations
+        if: failure()
+        run: |
+          LOG=/tmp/gradle.log
+          [ -f "$LOG" ] || exit 0
+          grep -E "error:|error generated|FAILED:|FAILURE:|CMake Error|ninja: build stopped" "$LOG" \
+            | head -40 | while IFS= read -r line; do
+              printf '::error::%s\n' "$(printf '%s' "$line" | cut -c1-240)"
+            done
+
+      - name: Upload build log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log
+          path: /tmp/gradle.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Verify the APK contents
         run: |
