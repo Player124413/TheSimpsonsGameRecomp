@@ -121,7 +121,7 @@ opens the graphics dialog:
 
 | Setting | What it does |
 |---|---|
-| GPU driver | System (vendor) or the bundled Turnip driver, see below. |
+| GPU driver | System (vendor) or Turnip — installable from a ZIP right in the app (see below); a driver bundled into the APK works as a fallback. |
 | VSync | Off also allows the tearing-capable present modes (`immediate`/`fifo_relaxed`) — uncapped frame rate at the cost of tearing. |
 | Internal resolution | `resolution_scale` 1x/2x/3x. 2x/3x render the 360 framebuffer larger and downscale — sharper, but only for flagship GPUs. |
 | Anti-aliasing | `swap_post_effect`: off / FXAA / FXAA (strong) — post-process AA on present. |
@@ -139,21 +139,31 @@ argv-identical to a settings-free build.
 ## GPU drivers (Turnip)
 
 Many Adreno GPUs run noticeably better (or at all, on older Qualcomm driver
-stacks) with **Turnip** — the open-source Mesa Freedreno Vulkan driver. The
-app supports bundling one into the APK:
+stacks) with **Turnip** — the open-source Mesa Freedreno Vulkan driver.
 
-* Build with a driver: `scripts/build-android.sh --turnip <zip-or-so>`, or
-  pass `turnip_url` to the manual CI workflow. Any arm64 `libvulkan*.so`
-  inside the ZIP is packaged as `lib/arm64-v8a/libvulkan.turnip.so`.
-* In the app: Graphics → **GPU driver** → *Turnip (bundled)*. The option only
-  appears as selectable when a driver is actually packaged.
-* Technically, the runtime loads the driver through the `vulkan_loader_path`
-  cvar (see `vulkan_instance.cpp`): the whole Vulkan session — instance,
-  device, swapchain — is created through that library instead of the system
-  `libvulkan.so`.
+**Installing a driver needs no rebuild and no PC:** download any community
+Turnip driver ZIP (arm64) onto the phone, then in the app: Graphics →
+**Install Turnip from ZIP…** → pick the ZIP. The driver is unpacked into the
+app's internal storage and becomes selectable in the same dialog (restart the
+game to load it). A bare `libvulkan*.so` file works too.
 
-If the game fails to start with Turnip selected, switch back to *System* —
-a Turnip build that predates your GPU may be missing required extensions.
+How it works under the hood: Android forbids `dlopen()`ing libraries from
+app-writable storage, so the runtime loads the installed driver through
+**libadrenotools** (vendored in the SDK, BSD-2-Clause — the same rootless
+driver-loading approach used by yuzu/skyline): the `vulkan_driver_path` cvar
+points at the unpacked `.so`, and `VulkanInstance::Create` opens it via a
+linker-namespace bypass that redirects the system Vulkan loader's driver
+enumeration to it. If the driver fails to open, the runtime logs an error and
+**falls back to the system driver** instead of dying.
+
+An alternative (mostly for CI/distribution) is bundling a driver into the APK
+at build time: `scripts/build-android.sh --turnip <zip-or-so>` or the
+`turnip_url` input of the manual CI workflow — it is packaged as
+`lib/arm64-v8a/libvulkan.turnip.so` and loaded through `vulkan_loader_path`.
+An installed driver always takes precedence over the bundled one.
+
+If the game fails to start with Turnip selected, switch back to *System* — a
+Turnip build that predates your GPU may be missing required extensions.
 Vendors' system drivers remain fully supported.
 
 ## Architecture notes
@@ -186,10 +196,13 @@ Key facts for maintainers:
 * **Libraries**: `libmain.so` (app entry, recompiled game code, app creator
   registration) + `librexruntime.so` (ReXGlue runtime incl. the Vulkan Xenos
   backend) + `libc++_shared.so` + `libxiso.so` (extract-xiso for on-device
-  ISO install, loaded only by SetupActivity). Windowing is SDL3 (statically
-  linked into the runtime), presenting through the activity's
-  `ANativeWindow` via `VK_KHR_android_surface`. A Turnip driver, when
-  bundled, ships as `libvulkan.turnip.so` in the same `lib/arm64-v8a/`.
+  ISO install, loaded only by SetupActivity) + the tiny libadrenotools hooks
+  (`libmain_hook.so`, `libhook_impl.so`, … — used to load player-installed
+  Turnip drivers). Windowing is SDL3 (statically linked into the runtime),
+  presenting through the activity's `ANativeWindow` via
+  `VK_KHR_android_surface`. A bundled Turnip driver, when built in, ships as
+  `libvulkan.turnip.so` in the same `lib/arm64-v8a/`; user-installed drivers
+  live in the app's internal `files/drivers/turnip/` instead.
 * **SDK Android support** lives in the vendored tree
   (`tools/rexglue-sdk`): JNI glue (`src/core/android_runtime.cpp`), bionic
   ucontext (`src/core/ucontext_android.cpp`), logcat sink, SDL window

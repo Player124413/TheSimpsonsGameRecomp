@@ -155,7 +155,7 @@ echo
 echo "APK: ${ROOT}/android/${APK}"
 ls -lh "${APK}"
 echo "Packaged native libraries:"
-unzip -l "${APK}" 'lib/*' | grep -E "libmain|librexruntime|libc\+\+_shared|libxiso|libvulkan" || true
+unzip -l "${APK}" 'lib/*' | grep -E "libmain|librexruntime|libc\+\+_shared|libxiso|libvulkan|lib.*hook" || true
 
 # Install -------------------------------------------------------------------
 if [[ "${DO_INSTALL}" == 1 ]]; then

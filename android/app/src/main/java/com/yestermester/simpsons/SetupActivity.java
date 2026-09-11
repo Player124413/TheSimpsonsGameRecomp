@@ -448,6 +448,10 @@ public class SetupActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == TurnipDriver.REQUEST_PICK) {
+            // Turnip driver ZIP picked from the graphics dialog.
+            GraphicsSettingsDialog.handleDriverPickResult(this, resultCode, data);
+        }
         if (requestCode == REQUEST_PICK_ISO) {
             if (resultCode != RESULT_OK || data == null || data.getData() == null) {
                 setStatus(R.string.setup_status_cancelled);

@@ -737,3 +737,15 @@ endif()
 
 # IDE folder organization
 set_target_properties(libavutil libavcodec PROPERTIES FOLDER "FFmpeg")
+
+#=============================================================================
+# libadrenotools (Android only): rootless custom GPU driver loading
+#=============================================================================
+# Lets the runtime load a user-installed Turnip driver from the app's internal
+# storage (Android forbids plain dlopen() there). Built as: a static
+# adrenotools+linkernsbypass pair linked into the runtime, plus tiny hook .so
+# libraries that AGP packages into the APK (they must sit in
+# nativeLibraryDir; requires useLegacyPackaging=true, which the app sets).
+if(ANDROID AND REXGLUE_USE_VULKAN)
+    add_subdirectory(adrenotools)
+endif()

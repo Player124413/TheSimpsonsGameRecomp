@@ -51,9 +51,16 @@
     <string name="gfx_title">Graphics</string>
     <string name="gfx_driver">GPU driver</string>
     <string name="gfx_driver_system">System (vendor)</string>
-    <string name="gfx_driver_turnip">Turnip (bundled)</string>
-    <string name="gfx_driver_turnip_missing">No Turnip driver is packaged in this build
-        (build the APK with a Turnip driver to enable it).</string>
+    <string name="gfx_driver_turnip">Turnip</string>
+    <string name="gfx_driver_status_none">Not installed. Download a Turnip driver ZIP
+        (arm64) and install it below.</string>
+    <string name="gfx_driver_status_installed">Installed driver: %1$s</string>
+    <string name="gfx_driver_status_bundled">Using the driver bundled in the APK.</string>
+    <string name="gfx_driver_install">Install Turnip from ZIP…</string>
+    <string name="gfx_driver_remove">Remove installed driver</string>
+    <string name="turnip_install_done">Turnip driver installed: %1$s. Select it and
+        restart the game.</string>
+    <string name="turnip_install_failed">Failed to install the driver: %1$s</string>
     <string name="gfx_vsync">Vertical sync (VSync)</string>
     <string name="gfx_resolution">Internal resolution</string>
     <string name="gfx_resolution_hint">2x/3x sharpen the picture but need a strong GPU

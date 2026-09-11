@@ -2,6 +2,7 @@ package com.yestermester.simpsons;
 
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.Intent;
 import android.view.View;
 import android.widget.CheckBox;
 import android.widget.LinearLayout;
@@ -10,9 +11,10 @@ import android.widget.RadioGroup;
 import android.widget.TextView;
 
 /**
- * Graphics settings: GPU driver (system vs bundled Turnip), vertical sync,
- * internal resolution scale, post-processing AA, frame limiter, letterboxing
- * and anisotropic filtering.
+ * Graphics settings: GPU driver (system vs Turnip, including installing a
+ * Turnip driver from a ZIP the player downloaded), vertical sync, internal
+ * resolution scale, post-processing AA, frame limiter, letterboxing and
+ * anisotropic filtering.
  *
  * All values translate into runtime cvar overrides written by
  * {@link GraphicsSettings#writeLaunchArgs(Context)} and are applied at the
@@ -27,10 +29,22 @@ public final class GraphicsSettingsDialog {
     private GraphicsSettingsDialog() {
     }
 
-    /** Shows the graphics settings dialog ({@code pad} may be null). */
+    /**
+     * Refresh hook for the driver section, set while a dialog is showing.
+     * Activities forward the Turnip picker result here so an install started
+     * from the dialog updates it live.
+     */
+    private static Runnable sDriverRefresh;
+
+    /** Call from an activity's onActivityResult for {@link TurnipDriver#REQUEST_PICK}. */
+    public static void handleDriverPickResult(android.app.Activity activity, int resultCode,
+                                              Intent data) {
+        TurnipDriver.handlePickResult(activity, resultCode, data, sDriverRefresh);
+    }
+
+    /** Shows the graphics settings dialog. */
     public static void show(Context context) {
         final GraphicsSettings s = GraphicsSettings.get(context);
-        final boolean turnipAvailable = GraphicsSettings.turnipAvailable(context);
 
         LinearLayout root = new LinearLayout(context);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -40,7 +54,7 @@ public final class GraphicsSettingsDialog {
         // --- GPU driver -----------------------------------------------------
         root.addView(label(context, R.string.gfx_driver));
         final RadioGroup driver = new RadioGroup(context);
-        RadioButton system = new RadioButton(context);
+        final RadioButton system = new RadioButton(context);
         system.setText(R.string.gfx_driver_system);
         system.setId(View.generateViewId());
         driver.addView(system);
@@ -48,18 +62,61 @@ public final class GraphicsSettingsDialog {
         turnip.setText(R.string.gfx_driver_turnip);
         turnip.setId(View.generateViewId());
         driver.addView(turnip);
-        if (!turnipAvailable) {
-            // No bundled driver in this APK: show why the option is off
-            // instead of a toggle that silently does nothing.
-            turnip.setEnabled(false);
-            TextView na = hint(context, R.string.gfx_driver_turnip_missing);
-            root.addView(driver);
-            root.addView(na);
+        root.addView(driver);
+
+        // Live status of the Turnip side: which driver would actually be used.
+        final TextView driverStatus = new TextView(context);
+        driverStatus.setTextSize(12);
+        driverStatus.setPadding((int) (34 * context.getResources().getDisplayMetrics().density),
+                0, 0, 0);
+        root.addView(driverStatus);
+
+        // Install a driver from a ZIP the player downloaded (e.g. a community
+        // Turnip build): unpacks into app-internal storage, no rebuild needed.
+        final android.widget.Button installDriver = new android.widget.Button(context);
+        installDriver.setText(R.string.gfx_driver_install);
+        root.addView(installDriver);
+
+        // Remove the installed driver (falls back to bundled/system).
+        final android.widget.Button removeDriver = new android.widget.Button(context);
+        removeDriver.setText(R.string.gfx_driver_remove);
+        root.addView(removeDriver);
+
+        final Runnable refreshDriverState = () -> {
+            String installed = TurnipDriver.installedSoName(context);
+            boolean bundled = GraphicsSettings.turnipAvailable(context);
+            boolean usable = installed != null || bundled;
+            turnip.setEnabled(usable);
+            if (installed != null) {
+                driverStatus.setText(
+                        context.getString(R.string.gfx_driver_status_installed, installed));
+            } else if (bundled) {
+                driverStatus.setText(R.string.gfx_driver_status_bundled);
+            } else {
+                driverStatus.setText(R.string.gfx_driver_status_none);
+            }
+            removeDriver.setVisibility(
+                    TurnipDriver.isInstalled(context) ? View.VISIBLE : View.GONE);
+            if (!usable) {
+                system.setChecked(true);
+            }
+        };
+        refreshDriverState.run();
+        if (GraphicsSettings.DRIVER_TURNIP.equals(s.driver()) && turnip.isEnabled()) {
+            turnip.setChecked(true);
         } else {
-            root.addView(driver);
+            system.setChecked(true);
         }
-        (GraphicsSettings.DRIVER_TURNIP.equals(s.driver()) && turnipAvailable
-                ? turnip : system).setChecked(true);
+
+        installDriver.setOnClickListener(v -> {
+            if (context instanceof android.app.Activity) {
+                TurnipDriver.startPicker((android.app.Activity) context);
+            }
+        });
+        removeDriver.setOnClickListener(v -> {
+            TurnipDriver.remove(context);
+            refreshDriverState.run();
+        });
 
         // --- VSync ------------------------------------------------------------
         final CheckBox vsync = new CheckBox(context);
@@ -157,14 +214,13 @@ public final class GraphicsSettingsDialog {
         // --- Footer note ----------------------------------------------------------
         root.addView(hint(context, R.string.gfx_restart_note));
 
+        sDriverRefresh = refreshDriverState;
         new AlertDialog.Builder(context)
                 .setTitle(R.string.gfx_title)
                 .setView(root)
                 .setPositiveButton(android.R.string.ok, (d, w) -> {
-                    if (turnipAvailable) {
-                        s.setDriver(turnip.isChecked()
-                                ? GraphicsSettings.DRIVER_TURNIP
-                                : GraphicsSettings.DRIVER_SYSTEM);
+                    if (turnip.isEnabled() && turnip.isChecked()) {
+                        s.setDriver(GraphicsSettings.DRIVER_TURNIP);
                     } else {
                         s.setDriver(GraphicsSettings.DRIVER_SYSTEM);
                     }
@@ -190,6 +246,11 @@ public final class GraphicsSettingsDialog {
                     }
                 })
                 .setNegativeButton(android.R.string.cancel, null)
+                .setOnDismissListener(d -> {
+                    if (sDriverRefresh == refreshDriverState) {
+                        sDriverRefresh = null;
+                    }
+                })
                 .show();
     }
 

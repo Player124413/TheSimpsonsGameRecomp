@@ -11,8 +11,8 @@ android {
         applicationId = "com.yestermester.simpsons"
         minSdk = 28
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
 
         // arm64-v8a only: the recompiled guest code, NEON paths and the
         // Vulkan backend are arm64-first; 32-bit devices are not supported

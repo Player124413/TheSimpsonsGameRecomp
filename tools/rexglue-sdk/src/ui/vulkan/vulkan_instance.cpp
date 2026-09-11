@@ -22,6 +22,14 @@
 #include <rex/ui/vulkan/instance.h>
 #include <rex/ui/vulkan/presenter.h>
 
+#if REX_PLATFORM_ANDROID
+#include <dlfcn.h>
+
+#include <adrenotools/driver.h>
+
+#include <rex/main_android.h>
+#endif  // REX_PLATFORM_ANDROID
+
 REXCVAR_DEFINE_BOOL(vulkan_log_debug_messages, true, "UI/Vulkan", "Log Vulkan debug messages");
 
 // Explicit Vulkan loader/driver library. Empty = the platform default
@@ -32,6 +40,17 @@ REXCVAR_DEFINE_BOOL(vulkan_log_debug_messages, true, "UI/Vulkan", "Log Vulkan de
 // through that driver instead of the vendor one.
 REXCVAR_DEFINE_STRING(vulkan_loader_path, "", "UI/Vulkan",
                       "Explicit Vulkan loader library path (empty = platform default)");
+
+#if REX_PLATFORM_ANDROID
+// User-installed custom GPU driver (Android only): a Turnip/Mesa driver the
+// player dropped into the app as a ZIP, unpacked by the launcher into the
+// app's INTERNAL files dir (Android forbids dlopen()ing from app-writable
+// storage, so this goes through libadrenotools' linker-namespace bypass
+// instead of a plain dlopen). Empty = not used.
+REXCVAR_DEFINE_STRING(vulkan_driver_path, "", "UI/Vulkan",
+                      "Custom GPU driver in app-internal storage, loaded via libadrenotools "
+                      "(empty = none; takes precedence over vulkan_loader_path)");
+#endif  // REX_PLATFORM_ANDROID
 
 namespace rex {
 namespace ui {
@@ -50,6 +69,38 @@ std::unique_ptr<VulkanInstance> VulkanInstance::Create(const bool with_surface,
   Functions& ifn = vulkan_instance->functions_;
 
   bool functions_loaded = true;
+
+#if REX_PLATFORM_ANDROID
+  // A user-installed custom driver (e.g. Turnip dropped in as a ZIP by the
+  // player) wins over everything else. adrenotools returns a handle to a
+  // patched copy of the system Vulkan loader whose driver enumeration is
+  // redirected to the custom library - a valid dlopen handle, so the rest
+  // of this function (symbol lookup, instance creation) is unchanged.
+  if (!REXCVAR_GET(vulkan_driver_path).empty()) {
+    const std::filesystem::path driver_path(REXCVAR_GET(vulkan_driver_path));
+    // customDriverDir is concatenated with customDriverName verbatim, so it
+    // must carry a trailing slash. tmpLibDir only matters on API < 29 (no
+    // memfd): the driver's own (internal, writable) directory works.
+    const std::string driver_dir = driver_path.parent_path().string() + "/";
+    const std::string driver_name = driver_path.filename().string();
+    void* adreno_handle = adrenotools_open_libvulkan(
+        RTLD_NOW, ADRENOTOOLS_DRIVER_CUSTOM, driver_dir.c_str(),
+        rex::GetAndroidNativeLibraryDir().c_str(), driver_dir.c_str(),
+        driver_name.c_str(), nullptr, nullptr);
+    if (adreno_handle != nullptr) {
+      vulkan_instance->loader_.Adopt(adreno_handle);
+      REXLOG_INFO("Custom Vulkan driver loaded via adrenotools: {}", driver_path.string());
+    } else {
+      // Fall through to the normal path so the session still starts (with
+      // the vendor driver) instead of dying on a bad/old Turnip build.
+      REXLOG_ERROR("adrenotools could not open custom driver {} - falling back "
+                   "to the default loader",
+                   driver_path.string());
+    }
+  }
+  if (!vulkan_instance->loader_) {
+#endif  // REX_PLATFORM_ANDROID
+
   const std::filesystem::path loader_path =
       !REXCVAR_GET(vulkan_loader_path).empty()
           ? std::filesystem::path(REXCVAR_GET(vulkan_loader_path))
@@ -58,6 +109,10 @@ std::unique_ptr<VulkanInstance> VulkanInstance::Create(const bool with_surface,
     REXLOG_ERROR("Failed to load {}", loader_path.string());
     return nullptr;
   }
+
+#if REX_PLATFORM_ANDROID
+  }
+#endif  // REX_PLATFORM_ANDROID
 #define XE_VULKAN_LOAD_LOADER_FUNCTION(name) \
   functions_loaded &= (ifn.name = vulkan_instance->loader_.GetSymbol<PFN_##name>(#name)) != nullptr;
   XE_VULKAN_LOAD_LOADER_FUNCTION(vkGetInstanceProcAddr);

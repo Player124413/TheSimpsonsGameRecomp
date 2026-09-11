@@ -173,7 +173,8 @@ jobs:
           APK="$(find android/app/build/outputs/apk -name '*.apk' | head -n 1)"
           test -n "$APK" && ls -lh "$APK"
           unzip -l "$APK" > /tmp/apk-list.txt
-          for lib in libmain.so librexruntime.so libc++_shared.so libxiso.so; do
+          for lib in libmain.so librexruntime.so libc++_shared.so libxiso.so \
+                      libmain_hook.so libhook_impl.so; do
             grep -q "lib/arm64-v8a/$lib" /tmp/apk-list.txt || {
               echo "APK is missing $lib"; exit 1
             }

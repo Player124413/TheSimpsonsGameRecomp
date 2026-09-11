@@ -151,11 +151,19 @@ public final class GraphicsSettings {
         GraphicsSettings s = get(context);
         List<String> args = new ArrayList<>();
 
-        // GPU driver: an explicit loader path routes the whole Vulkan session
-        // through the bundled Turnip driver instead of the vendor one.
-        if (DRIVER_TURNIP.equals(s.driver()) && turnipAvailable(context)) {
-            File turnip = new File(context.getApplicationInfo().nativeLibraryDir, TURNIP_LIB);
-            args.add("--vulkan_loader_path=" + turnip.getAbsolutePath());
+        // GPU driver: the player-installed Turnip driver (dropped into the app
+        // as a ZIP, unpacked to internal storage) is loaded by the runtime
+        // through libadrenotools; a driver BUNDLED in the APK (nativeLibraryDir
+        // is dlopen-able directly) uses the plain loader path.
+        if (DRIVER_TURNIP.equals(s.driver())) {
+            File installed = TurnipDriver.installedSoPath(context);
+            if (installed != null) {
+                args.add("--vulkan_driver_path=" + installed.getAbsolutePath());
+            } else if (turnipAvailable(context)) {
+                File turnip =
+                        new File(context.getApplicationInfo().nativeLibraryDir, TURNIP_LIB);
+                args.add("--vulkan_loader_path=" + turnip.getAbsolutePath());
+            }
         }
 
         // VSync. Disabling it also allows the tearing-capable present modes

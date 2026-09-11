@@ -70,6 +70,15 @@ public class MainActivity extends SDLActivity {
     }
 
     @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == TurnipDriver.REQUEST_PICK) {
+            // Turnip driver ZIP picked from the graphics dialog.
+            GraphicsSettingsDialog.handleDriverPickResult(this, resultCode, data);
+        }
+    }
+
+    @Override
     protected String[] getLibraries() {
         return new String[]{
                 "main"

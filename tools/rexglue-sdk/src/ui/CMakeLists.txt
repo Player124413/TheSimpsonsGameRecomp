@@ -146,7 +146,9 @@ if(WIN32)
 elseif(ANDROID)
     # ANativeWindow query (surface_android.cpp) lives in libandroid; the SDL3
     # window backend (window_sdl.cpp) needs the SDL headers/static lib.
-    target_link_libraries(rexui PUBLIC android log SDL3::SDL3)
+    # adrenotools: rootless custom GPU driver loading (user-installed Turnip
+    # builds) used by the Vulkan instance.
+    target_link_libraries(rexui PUBLIC android log SDL3::SDL3 adrenotools)
 else()
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
