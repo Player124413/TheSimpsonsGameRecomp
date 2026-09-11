@@ -116,6 +116,65 @@ using XSystemClock = detail::NtSystemClock<detail::Domain::Guest>;
 
 namespace std::chrono {
 
+#if defined(_LIBCPP_VERSION) && _LIBCPP_VERSION < 220000
+// libc++ has not implemented P0355R7's clock_time_conversion / clock_cast
+// ([time.clock.cast]) in any release so far - the paper is still tracked as
+// partial upstream (llvm-project#99982; UTC clock landed in LLVM 20, TAI/GPS
+// in 21, clock conversion is not started). Declare the standard's templates
+// here so the specializations below and the runtime's clock_cast call sites
+// compile on libc++ (NDK's libc++ included). Semantics mirror [time.clock.cast]
+// / the other standard libraries. Drop this block when libc++ ships them
+// (and bump the version guard).
+template <class Clock, class Clock2 = Clock>
+struct clock_time_conversion {
+  // Default conversion: same duration count, reinterpreted in the destination
+  // clock's epoch (only meaningful when the clocks share an epoch).
+  template <class Duration>
+  time_point<Clock2, Duration> operator()(const time_point<Clock, Duration>& t) const {
+    return time_point<Clock2, Duration>{t.time_since_epoch()};
+  }
+};
+
+template <class Clock>
+struct clock_time_conversion<Clock, system_clock> {
+  template <class Duration>
+  auto operator()(const time_point<system_clock, Duration>& t) const
+      -> decltype(Clock::from_sys(t)) {
+    return Clock::from_sys(t);
+  }
+};
+
+template <class Clock>
+struct clock_time_conversion<system_clock, Clock> {
+  template <class Duration>
+  auto operator()(const time_point<Clock, Duration>& t) const
+      -> decltype(Clock::to_sys(t)) {
+    return Clock::to_sys(t);
+  }
+};
+
+template <>
+struct clock_time_conversion<system_clock, system_clock> {
+  template <class Duration>
+  time_point<system_clock, Duration> operator()(
+      const time_point<system_clock, Duration>& t) const {
+    return t;
+  }
+};
+
+// [time.clock.cast]/3: direct conversion when well-formed, otherwise via
+// system_clock.
+template <class DestClock, class SourceClock, class Duration>
+auto clock_cast(const time_point<SourceClock, Duration>& t) {
+  if constexpr (requires { clock_time_conversion<DestClock, SourceClock>{}(t); }) {
+    return clock_time_conversion<DestClock, SourceClock>{}(t);
+  } else {
+    return clock_time_conversion<DestClock, system_clock>{}(
+        clock_time_conversion<system_clock, SourceClock>{}(t));
+  }
+}
+#endif  // _LIBCPP_VERSION && _LIBCPP_VERSION < 220000
+
 template <>
 struct clock_time_conversion<::rex::chrono::WinSystemClock, ::rex::chrono::XSystemClock> {
   using WClock_ = ::rex::chrono::WinSystemClock;
