@@ -59,6 +59,7 @@
     <string name="gfx_driver_status_bundled">Используется драйвер, встроенный в APK.</string>
     <string name="gfx_driver_install">Установить Turnip из ZIP…</string>
     <string name="gfx_driver_remove">Удалить установленный драйвер</string>
+    <string name="gfx_driver_button">Драйвер GPU (Turnip)…</string>
     <string name="turnip_install_done">Драйвер Turnip установлен: %1$s. Выберите его и
         перезапустите игру.</string>
     <string name="turnip_install_failed">Не удалось установить драйвер: %1$s</string>

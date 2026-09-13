@@ -117,11 +117,6 @@ public class SetupActivity extends Activity {
         playButton.setVisibility(View.GONE);
         root.addView(playButton);
 
-        Button resetButton = new Button(this);
-        resetButton.setText(R.string.setup_reset);
-        resetButton.setOnClickListener(v -> resetConfig());
-        root.addView(resetButton);
-
         // Install straight from the player's own ISO, entirely on-device
         // (extract-xiso runs natively in libxiso.so).
         isoButton = new Button(this);
@@ -133,6 +128,20 @@ public class SetupActivity extends Activity {
         gfxButton.setText(R.string.gfx_title);
         gfxButton.setOnClickListener(v -> GraphicsSettingsDialog.show(this));
         root.addView(gfxButton);
+
+        // Dedicated driver button: on Adreno devices switching to a Turnip
+        // (Mesa) driver is the single biggest graphics/performance lever, so
+        // the ZIP import gets its own top-level launcher entry instead of
+        // living only inside the graphics dialog.
+        Button driverButton = new Button(this);
+        driverButton.setText(R.string.gfx_driver_button);
+        driverButton.setOnClickListener(v -> GraphicsSettingsDialog.showDriver(this));
+        root.addView(driverButton);
+
+        Button resetButton = new Button(this);
+        resetButton.setText(R.string.setup_reset);
+        resetButton.setOnClickListener(v -> resetConfig());
+        root.addView(resetButton);
 
         setContentView(root);
 

@@ -195,6 +195,19 @@ public final class GraphicsSettings {
             args.add("--anisotropic_override=" + s.anisotropic());
         }
 
+        if (s.showFps()) {
+            args.add("--show_debug_overlay=true");
+        }
+
+        // Compatibility toggles for known game-specific rendering issues
+        // (see the comments on the getters).
+        if (s.compatMissingGeometry()) {
+            args.add("--gpu_allow_null_optional_streams=true");
+        }
+        if (s.compatFlicker()) {
+            args.add("--use_fuzzy_alpha_epsilon=true");
+        }
+
         try {
             File external = context.getExternalFilesDir(null);
             if (external == null) {

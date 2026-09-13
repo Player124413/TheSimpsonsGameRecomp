@@ -52,6 +52,10 @@ namespace rex {
 
 // --- ReXApp ---
 
+REXCVAR_DEFINE_BOOL(show_debug_overlay, false, "UI",
+                    "Show the FPS/performance debug overlay from startup "
+                    "(the F3 toggle is unreachable on touch devices)");
+
 ReXApp::~ReXApp() = default;
 
 ReXApp::ReXApp(ui::WindowedAppContext& ctx, std::string_view name, PPCImageInfo ppc_info,
@@ -419,6 +423,14 @@ bool ReXApp::SetupPresentation() {
                                                                       frame_stats_provider_);
           }
         });
+        // Touch devices have no F3: the Android launcher exposes this cvar as
+        // a "show FPS" toggle. Created here right next to the keybind that
+        // does the same thing.
+        if (REXCVAR_GET(show_debug_overlay)) {
+          debug_overlay_ =
+              std::make_unique<ui::DebugOverlayDialog>(imgui_drawer_.get(),
+                                                       frame_stats_provider_);
+        }
         rex::ui::RegisterBind("bind_console", "Backtick", "Toggle console overlay", [this] {
           if (console_overlay_) {
             console_overlay_.reset();

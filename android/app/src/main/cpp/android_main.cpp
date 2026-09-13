@@ -21,7 +21,11 @@
 #include <android/log.h>
 #include <dlfcn.h>
 #include <jni.h>
+#include <sched.h>
 
+#include <algorithm>
+#include <cctype>
+#include <cerrno>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -97,6 +101,91 @@ JavaVM* QueryJavaVm() {
     }
   }
   return nullptr;
+}
+
+// --- Performance CPU affinity (big.LITTLE) -----------------------------------
+//
+// Phone SoCs mix fast ("big") and slow ("little") cores. Android's scheduler
+// balances for battery, not for a 60 FPS emulation workload: letting the
+// guest-CPU thread land on a little core alone can halve the frame rate, and
+// cluster migrations cause frame-time spikes. Pinning the whole runtime to
+// the performance cluster (all threads inherit the caller's affinity mask)
+// is the standard emulator/recomp optimization on Android - the hot threads
+// stay on the big cores and the handful of background threads (audio, shader
+// workers) fit comfortably on them too.
+//
+// The cluster is detected from the per-core maximum frequency exposed by
+// cpufreq: every core within 78% of the fastest core's max frequency is
+// considered "performance". Typical outcomes:
+//   1+3+4 (SD 8-series):  prime + gold cores, silver excluded
+//   4+4   (SD 6/7-series): gold cluster, silver excluded
+//   single-cluster chips: all cores -> mask equals the default, no-op
+std::vector<unsigned> ReadCoreMaxFreqsKhz() {
+  std::vector<unsigned> freqs;
+  std::error_code ec;
+  for (const auto& entry :
+       std::filesystem::directory_iterator{"/sys/devices/system/cpu", ec}) {
+    const std::string name = entry.path().filename().string();
+    if (name.rfind("cpu", 0) != 0 || name.size() <= 3) {
+      continue;
+    }
+    const std::string idx = name.substr(3);
+    if (!std::all_of(idx.begin(), idx.end(),
+                     [](unsigned char c) { return std::isdigit(c) != 0; })) {
+      continue;
+    }
+    std::ifstream in(entry.path() / "cpufreq" / "cpuinfo_max_freq");
+    unsigned khz = 0;
+    if (in >> khz) {
+      const size_t core = static_cast<size_t>(std::stoul(idx));
+      if (freqs.size() <= core) {
+        freqs.resize(core + 1, 0);
+      }
+      freqs[core] = khz;
+    }
+  }
+  return freqs;
+}
+
+void ApplyPerformanceCpuAffinity() {
+  const std::vector<unsigned> freqs = ReadCoreMaxFreqsKhz();
+  const auto it = std::max_element(freqs.begin(), freqs.end());
+  if (it == freqs.end() || *it == 0) {
+    REXLOG_INFO("cpu_affinity: no cpufreq data, leaving scheduler defaults");
+    return;
+  }
+  constexpr double kKeepRatio = 0.78;
+  cpu_set_t keep;
+  CPU_ZERO(&keep);
+  int kept = 0;
+  int present = 0;
+  std::string kept_list;
+  for (size_t i = 0; i < freqs.size(); ++i) {
+    if (freqs[i] == 0) {
+      continue;  // Offline / unknown core.
+    }
+    ++present;
+    if (static_cast<double>(freqs[i]) >= kKeepRatio * static_cast<double>(*it)) {
+      CPU_SET(static_cast<unsigned>(i), &keep);
+      ++kept;
+      if (!kept_list.empty()) {
+        kept_list += ",";
+      }
+      kept_list += std::to_string(i);
+    }
+  }
+  // Only pin when we actually narrow the mask (and keep at least two cores so
+  // audio/shader threads are not serialized behind the guest thread).
+  if (kept < 2 || kept >= present) {
+    REXLOG_INFO("cpu_affinity: homogeneous cluster ({} cores), no pinning", present);
+    return;
+  }
+  if (sched_setaffinity(0, sizeof(keep), &keep) != 0) {
+    REXLOG_INFO("cpu_affinity: sched_setaffinity failed (errno {}), continuing", errno);
+    return;
+  }
+  REXLOG_INFO("cpu_affinity: pinned runtime to {} performance cores [{}] of {}",
+              kept, kept_list, present);
 }
 
 void PrepareStorageDirs(const std::string& external_dir, const std::string& game_root) {
@@ -232,6 +321,12 @@ int RunAndroidApp(int argc, char** argv) {
   (void)remaining;  // No positional args on Android (paths wired via cvars).
   rex::cvar::ApplyEnvironment();
   rex::InitLoggingEarly();
+
+  // Performance: pin the runtime to the big cores BEFORE any runtime thread
+  // exists (every thread created later inherits this affinity mask). Must run
+  // after cvar::Init so the launch args can disable it if a specific device
+  // behaves better with the stock scheduler.
+  ApplyPerformanceCpuAffinity();
 
   // --- Diagnostic state (REXLOG now also reaches logcat on Android). ---
   REXLOG_INFO("android_main: app={}", kAppIdentifier);
