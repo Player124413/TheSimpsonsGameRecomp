@@ -19,6 +19,7 @@
 #include <rex/logging.h>
 #include <rex/platform.h>
 #include <rex/ui/flags.h>
+#include <rex/ui/menu_item.h>
 #include <rex/ui/sdl_virtual_key.h>
 #include <rex/ui/surface_android.h>
 
@@ -401,6 +402,25 @@ void WindowSDL::HandleMouseEvent(SDL_Event& event) {
     default:
       break;
   }
+}
+
+namespace {
+// The SDL/Android backend has no platform menu bar (desktop menus are
+// replaced by the in-app touch overlay), but the core MenuItem helpers in
+// menu_item.cpp delegate to this backend factory, so it must exist for the
+// link. The base class already implements the full child-list bookkeeping.
+class SdlMenuItem : public MenuItem {
+ public:
+  SdlMenuItem(Type type, const std::string& text, const std::string& hotkey,
+              std::function<void()> callback)
+      : MenuItem(type, text, hotkey, std::move(callback)) {}
+};
+}  // namespace
+
+std::unique_ptr<ui::MenuItem> MenuItem::Create(Type type, const std::string& text,
+                                               const std::string& hotkey,
+                                               std::function<void()> callback) {
+  return std::make_unique<SdlMenuItem>(type, text, hotkey, std::move(callback));
 }
 
 }  // namespace ui
