@@ -730,6 +730,12 @@ target_include_directories(libavcodec
 )
 target_compile_definitions(libavcodec PRIVATE ${FFMPEG_COMMON_DEFINES})
 target_compile_options(libavcodec PRIVATE -w)  # Suppress warnings in third-party code
+# See the matching libavutil block: hidden visibility keeps the C-owned data
+# tables non-preemptible so the NEON asm's direct adrp+add relocations are
+# accepted when linking into a shared library.
+if(ANDROID)
+    target_compile_options(libavcodec PRIVATE -fvisibility=hidden)
+endif()
 target_link_libraries(libavcodec PUBLIC libavutil)
 if(WIN32)
     target_link_libraries(libavcodec PRIVATE bcrypt)
