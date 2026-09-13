@@ -77,6 +77,12 @@
     <string name="gfx_aniso">Анизотропная фильтрация</string>
     <string name="gfx_aniso_default">По умолчанию</string>
     <string name="gfx_restart_note">Применится при следующем запуске игры.</string>
+    <string name="gfx_show_fps">Показывать счётчик FPS (оверлей производительности)</string>
+    <string name="gfx_compat_title">Устранение графических проблем</string>
+    <string name="gfx_compat_missing_geometry">Персонажи или объекты не появляются</string>
+    <string name="gfx_compat_flicker">Мерцание или «шум» в текстурах</string>
+    <string name="gfx_compat_hint">Включайте эти пункты, только если видите описанную
+        проблему. Если стало хуже или игра стала вылетать — выключите обратно.</string>
 
     <!-- On-device ISO install -->
     <string name="setup_install_iso">Установить из ISO…</string>

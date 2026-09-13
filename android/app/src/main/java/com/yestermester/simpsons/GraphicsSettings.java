@@ -81,6 +81,45 @@ public final class GraphicsSettings {
         prefs.edit().putBoolean("vsync", on).apply();
     }
 
+    /**
+     * Show the in-game FPS/performance overlay (the desktop F3 debug overlay;
+     * touch devices have no way to press F3, so it is driven by a cvar).
+     */
+    public boolean showFps() {
+        return prefs.getBoolean("show_fps", false);
+    }
+
+    public void setShowFps(boolean on) {
+        prefs.edit().putBoolean("show_fps", on).apply();
+    }
+
+    /**
+     * Compatibility: draw meshes whose only invalid vertex fetch constants
+     * are all-zero optional streams the shader never reads. The runtime
+     * default (off on Vulkan) can veto entire character draws on some
+     * drivers - the "characters/objects never appear" class of bugs.
+     */
+    public boolean compatMissingGeometry() {
+        return prefs.getBoolean("compat_missing_geometry", false);
+    }
+
+    public void setCompatMissingGeometry(boolean on) {
+        prefs.edit().putBoolean("compat_missing_geometry", on).apply();
+    }
+
+    /**
+     * Compatibility: approximate alpha-test compare to prevent texture
+     * flickering (originally an NVIDIA workaround, also helps some mobile
+     * drivers).
+     */
+    public boolean compatFlicker() {
+        return prefs.getBoolean("compat_flicker", false);
+    }
+
+    public void setCompatFlicker(boolean on) {
+        prefs.edit().putBoolean("compat_flicker", on).apply();
+    }
+
     /** Internal render resolution scale multiplier (1 = native 1x). */
     public int resolutionScale() {
         int v = prefs.getInt("resolution_scale", 1);
