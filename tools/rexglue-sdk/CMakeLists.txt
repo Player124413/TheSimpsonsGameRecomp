@@ -151,6 +151,17 @@ if(WIN32)
         message(FATAL_ERROR "Unsupported Windows architecture: ${CMAKE_SYSTEM_PROCESSOR}")
     endif()
     add_compile_definitions(REX_PLATFORM_WINDOWS=1)
+elseif(ANDROID)
+    # Android (NDK toolchain). arm64-v8a only: the recompiled guest code, the
+    # Vulkan backend and the FFmpeg NEON paths are all arm64-first.
+    if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|ARM64|arm64")
+        message(FATAL_ERROR
+            "ReXGlue Android builds support arm64-v8a only (found: ${CMAKE_SYSTEM_PROCESSOR})")
+    endif()
+    set(REX_PLATFORM "android-arm64")
+    # REX_PLATFORM_LINUX=1 keeps the POSIX backend selection (bionic) working;
+    # REX_PLATFORM_ANDROID unlocks the Android-specific glue (see platform.h).
+    add_compile_definitions(REX_PLATFORM_ANDROID=1 REX_PLATFORM_LINUX=1)
 elseif(UNIX AND NOT APPLE)
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64|x86_64")
         set(REX_PLATFORM "linux-amd64")
@@ -161,7 +172,7 @@ elseif(UNIX AND NOT APPLE)
     endif()
     add_compile_definitions(REX_PLATFORM_LINUX=1)
 else()
-    message(FATAL_ERROR "Unsupported platform. ReXGlue supports Windows and Linux only.")
+    message(FATAL_ERROR "Unsupported platform. ReXGlue supports Windows, Linux and Android.")
 endif()
 
 # Build config as compile definition (multi-config generators don't know config at configure time)
@@ -236,8 +247,13 @@ add_subdirectory(src/audio)
 add_subdirectory(src/graphics)
 add_subdirectory(src/system)
 add_subdirectory(src/kernel)
-add_subdirectory(src/codegen)
-add_subdirectory(src/rexglue)
+if(NOT ANDROID)
+    # The rexglue CLI (codegen tool) is a host-only utility; the codegen
+    # library itself is only needed to run the recompiler, which never
+    # happens on-device.
+    add_subdirectory(src/codegen)
+    add_subdirectory(src/rexglue)
+endif()
 
 # Add tests subdirectory if tests are enabled
 if(REXGLUE_BUILD_TESTS)

@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">The Simpsons Game</string>
+
+    <!-- Onboarding / setup -->
+    <string name="setup_title">Настройка данных игры</string>
+    <string name="setup_help">Скопируйте на телефон файлы игры, извлечённые из
+        ВАШЕЙ СОБСТВЕННОЙ легально приобретённой копии The Simpsons Game для
+        Xbox 360 (например, в Download/SimpsonsGame), затем выберите эту папку
+        ниже.\n\nВ папке должны быть default.xex и файлы данных игры (около
+        4 ГБ).\n\nНа ПК: запустите настольный лаунчер, установите игру из своего
+        ISO через вкладку Install и скопируйте папку установленной игры на
+        телефон.</string>
+    <string name="setup_pick">Выбрать папку с игрой</string>
+    <string name="setup_play">Играть</string>
+    <string name="setup_reset">Сбросить настройки</string>
+    <string name="setup_status_idle">Данные игры ещё не настроены.</string>
+    <string name="setup_status_ready">Данные игры найдены. Можно играть!</string>
+    <string name="setup_status_copying">Копируем игру в хранилище приложения… %1$d%%</string>
+    <string name="setup_status_allfiles">Для чтения папки на месте нужен доступ
+        «ко всем файлам». Разрешите его в открывшемся экране настроек, вернитесь
+        и снова выберите папку.</string>
+    <string name="setup_status_permission">Для чтения папки с игрой нужно
+        разрешение на хранение. Выдайте его и снова выберите папку.</string>
+    <string name="setup_status_notfound">В выбранной папке нет default.xex.
+        Убедитесь, что скопированы извлечённые данные игры (а не сам ISO).</string>
+    <string name="setup_status_copied">Игра скопирована в хранилище приложения.</string>
+    <string name="setup_status_cancelled">Выбор папки отменён.</string>
+    <string name="setup_status_error">Что-то пошло не так: %1$s</string>
+    <string name="setup_confirm_reset">Сбросить сохранённую папку с игрой?
+        Придётся выбрать её заново.</string>
+    <string name="setup_confirm_reset_layout">Вернуть все кнопки к стандартным позициям, размерам и видимости?</string>
+
+    <!-- Touch gamepad -->
+    <string name="pad_settings_title">Сенсорное управление</string>
+    <string name="pad_enabled">Экранный геймпад включён</string>
+    <string name="pad_enabled_hint">Выключите, чтобы играть только физическим
+        (Bluetooth/USB) контроллером.</string>
+    <string name="pad_size">Размер кнопок</string>
+    <string name="pad_opacity">Прозрачность</string>
+    <string name="pad_edit">Редактировать кнопки</string>
+    <string name="pad_reset">Сбросить раскладку</string>
+    <string name="pad_edit_hint">Перетаскивайте кнопки, чтобы перемещать их.
+        Выберите кнопку и меняйте размер кнопками +/−. Нажмите на глаз, чтобы
+        скрыть или показать кнопку. Все изменения сохраняются
+        автоматически.</string>
+    <string name="pad_edit_done">Готово</string>
+    <string name="pad_edit_exit">Выйти из редактирования</string>
+    <string name="pad_open_graphics">Графика…</string>
+
+    <!-- Graphics settings -->
+    <string name="gfx_title">Графика</string>
+    <string name="gfx_driver">Драйвер GPU</string>
+    <string name="gfx_driver_system">Системный (производителя)</string>
+    <string name="gfx_driver_turnip">Turnip</string>
+    <string name="gfx_driver_status_none">Не установлен. Скачайте ZIP с драйвером Turnip
+        (arm64) и установите его кнопкой ниже.</string>
+    <string name="gfx_driver_status_installed">Установленный драйвер: %1$s</string>
+    <string name="gfx_driver_status_bundled">Используется драйвер, встроенный в APK.</string>
+    <string name="gfx_driver_install">Установить Turnip из ZIP…</string>
+    <string name="gfx_driver_remove">Удалить установленный драйвер</string>
+    <string name="gfx_driver_button">Драйвер GPU (Turnip)…</string>
+    <string name="turnip_install_done">Драйвер Turnip установлен: %1$s. Выберите его и
+        перезапустите игру.</string>
+    <string name="turnip_install_failed">Не удалось установить драйвер: %1$s</string>
+    <string name="gfx_vsync">Вертикальная синхронизация (VSync)</string>
+    <string name="gfx_resolution">Внутреннее разрешение</string>
+    <string name="gfx_resolution_hint">2x/3x делают картинку чётче, но нужны мощный
+        GPU — на большинстве телефонов оставьте 1x.</string>
+    <string name="gfx_post">Сглаживание (пост-обработка)</string>
+    <string name="gfx_post_none">Выкл</string>
+    <string name="gfx_post_strong">(сильное)</string>
+    <string name="gfx_fps">Ограничение кадров</string>
+    <string name="gfx_fps_hint">30 экономит батарею и выравнивает картинку на слабых
+        телефонах; 60 — полная скорость.</string>
+    <string name="gfx_letterbox">Сохранять пропорции 16:9 (полосы по краям)</string>
+    <string name="gfx_aniso">Анизотропная фильтрация</string>
+    <string name="gfx_aniso_default">По умолчанию</string>
+    <string name="gfx_restart_note">Применится при следующем запуске игры.</string>
+    <string name="gfx_show_fps">Показывать счётчик FPS (оверлей производительности)</string>
+    <string name="gfx_compat_title">Устранение графических проблем</string>
+    <string name="gfx_compat_missing_geometry">Персонажи или объекты не появляются</string>
+    <string name="gfx_compat_flicker">Мерцание или «шум» в текстурах</string>
+    <string name="gfx_compat_hint">Включайте эти пункты, только если видите описанную
+        проблему. Если стало хуже или игра стала вылетать — выключите обратно.</string>
+
+    <!-- On-device ISO install -->
+    <string name="setup_install_iso">Установить из ISO…</string>
+    <string name="setup_install_help">Выберите свой легально приобретённый ISO игры —
+        он будет извлечён прямо на телефоне (несколько минут и ~5 ГБ свободного
+        места).</string>
+    <string name="setup_extract_progress">Извлечение ISO… %1$s из ~%2$s</string>
+    <string name="setup_extract_preparing">Подготовка извлечения…</string>
+    <string name="setup_extract_failed">Ошибка извлечения: %1$s</string>
+    <string name="setup_extract_notiso">Выбранный файл не похож на ISO The Simpsons
+        Game (внутри нет default.xex).</string>
+    <string name="setup_extract_space">Недостаточно свободного места: нужно около %1$s,
+        доступно %2$s.</string>
+    <string name="setup_extract_done">Игра установлена из ISO.</string>
+</resources>

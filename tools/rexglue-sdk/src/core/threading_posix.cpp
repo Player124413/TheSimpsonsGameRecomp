@@ -216,8 +216,12 @@ bool SetTlsValue(TlsHandle handle, uintptr_t value) {
 class PosixConditionBase {
  public:
   PosixConditionBase() {
-#if REX_PLATFORM_LINUX
+#if REX_PLATFORM_LINUX && !REX_PLATFORM_ANDROID
     // Use robust mutexes so waits can recover if owner thread terminates.
+    // NOTE: bionic does not implement the POSIX robust-mutex API (no
+    // pthread_mutexattr_setrobust / PTHREAD_MUTEX_ROBUST /
+    // pthread_mutex_consistent), so Android keeps plain std::mutex behavior
+    // and falls through to the #else paths below.
     pthread_mutexattr_t attr;
     if (pthread_mutexattr_init(&attr) == 0) {
       if (pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST) == 0) {
@@ -236,7 +240,7 @@ class PosixConditionBase {
   WaitResult Wait(std::chrono::milliseconds timeout) {
     bool executed;
     auto predicate = [this] { return this->signaled(); };
-#if REX_PLATFORM_LINUX
+#if REX_PLATFORM_LINUX && !REX_PLATFORM_ANDROID
     auto native_mutex = static_cast<pthread_mutex_t*>(mutex_.native_handle());
     int lock_result = pthread_mutex_lock(native_mutex);
     if (lock_result == EOWNERDEAD) {
@@ -307,7 +311,7 @@ class PosixConditionBase {
       bool all_locked = true;
 
       for (size_t i = 0; i < handles.size(); ++i) {
-#if REX_PLATFORM_LINUX
+#if REX_PLATFORM_LINUX && !REX_PLATFORM_ANDROID
         auto native_mutex = static_cast<pthread_mutex_t*>(handles[i]->mutex_.native_handle());
         int result = pthread_mutex_trylock(native_mutex);
         if (result == 0 || result == EOWNERDEAD) {
@@ -614,6 +618,15 @@ class PosixCondition<Thread> : public PosixConditionBase {
       return false;
     }
     if (params.initial_priority != 0) {
+#if REX_PLATFORM_ANDROID
+      // Bionic/Android: SCHED_FIFO requires the RT priviledge a normal app
+      // never has -- pthread_create with an SCHED_FIFO attribute fails with
+      // EPERM and the whole thread creation would fail. Run with the default
+      // policy; the guest's audio/GPU "boost" threads still out-prioritize
+      // nothing, but sched_setaffinity (below) and the OS scheduler handle
+      // the big-core placement that actually matters on a phone.
+      (void)params;
+#else
       sched_param sched{};
       sched.sched_priority = params.initial_priority + 1;
       if (pthread_attr_setschedpolicy(&attr, SCHED_FIFO) != 0) {
@@ -624,6 +637,7 @@ class PosixCondition<Thread> : public PosixConditionBase {
         pthread_attr_destroy(&attr);
         return false;
       }
+#endif
     }
     if (pthread_create(&thread_, &attr, ThreadStartRoutine, start_data) != 0) {
       pthread_attr_destroy(&attr);

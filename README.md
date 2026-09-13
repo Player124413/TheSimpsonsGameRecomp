@@ -36,7 +36,7 @@ you don't need to manually re-download after the first time.
 |---|---|
 | Linux / Steam Deck | ✅ Playable (menus, saves, videos, gameplay) |
 | Windows | ✅ Builds & boots to gameplay (clang + D3D12) — first bring-up, expect rough edges. So far only actually tested on a Steam Deck's Windows dual-boot partition (Van Gogh APU); not yet verified on a general desktop PC / discrete GPU. |
-| Android | 🗺 Planned |
+| Android | ✅ Builds (`scripts/build-android.sh`, CI: `build-android.yml`) — arm64-v8a, Vulkan, on-screen gamepad with a full layout editor, graphics settings, user-installable Turnip GPU drivers and on-device install from the player's own ISO. See [docs/ANDROID.md](docs/ANDROID.md). |
 
 Input: controller required for now — experimental keyboard/mouse emulation can be enabled in
 the launcher (Settings → Input).

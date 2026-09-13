@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">The Simpsons Game</string>
+
+    <!-- Onboarding / setup -->
+    <string name="setup_title">Game data setup</string>
+    <string name="setup_help">Copy the game files you extracted from YOUR OWN
+        legally-owned Xbox 360 copy of The Simpsons Game onto the phone (for
+        example into Download/SimpsonsGame), then pick that folder below.\n\nThe
+        folder must contain default.xex and the game\'s data files (about 4 GB).\n\nOn
+        PC: run the desktop launcher, use its Install tab with your ISO, then
+        copy the installed game folder to the phone.</string>
+    <string name="setup_pick">Choose game folder</string>
+    <string name="setup_play">Play</string>
+    <string name="setup_reset">Reset configuration</string>
+    <string name="setup_status_idle">Game data is not configured yet.</string>
+    <string name="setup_status_ready">Game data found. Ready to play!</string>
+    <string name="setup_status_copying">Copying the game into app storage… %1$d%%</string>
+    <string name="setup_status_allfiles">All-files access is required to read the
+        folder in place. Grant it in the system settings screen that just
+        opened, then come back and pick the folder again.</string>
+    <string name="setup_status_permission">Storage permission is required to read
+        the game folder. Grant it, then pick the folder again.</string>
+    <string name="setup_status_notfound">The picked folder does not contain
+        default.xex. Make sure you copied the extracted game data (not the ISO
+        itself).</string>
+    <string name="setup_status_copied">Game copied into app storage.</string>
+    <string name="setup_status_cancelled">Folder selection cancelled.</string>
+    <string name="setup_status_error">Something went wrong: %1$s</string>
+    <string name="setup_confirm_reset">Reset the saved game folder? You will
+        need to pick it again.</string>
+    <string name="setup_confirm_reset_layout">Reset all button positions, sizes and visibility to defaults?</string>
+
+    <!-- Touch gamepad -->
+    <string name="pad_settings_title">Touch controls</string>
+    <string name="pad_enabled">On-screen gamepad enabled</string>
+    <string name="pad_enabled_hint">Disable to play with a physical
+        (Bluetooth/USB) controller only.</string>
+    <string name="pad_size">Button size</string>
+    <string name="pad_opacity">Opacity</string>
+    <string name="pad_edit">Edit layout</string>
+    <string name="pad_reset">Reset layout</string>
+    <string name="pad_edit_hint">Drag buttons to move them. Select a button and
+        use +/− to resize it. Tap the eye to hide or show a button. All
+        changes are saved automatically.</string>
+    <string name="pad_edit_done">Done</string>
+    <string name="pad_edit_exit">Exit editing</string>
+    <string name="pad_open_graphics">Graphics…</string>
+
+    <!-- Graphics settings -->
+    <string name="gfx_title">Graphics</string>
+    <string name="gfx_driver">GPU driver</string>
+    <string name="gfx_driver_system">System (vendor)</string>
+    <string name="gfx_driver_turnip">Turnip</string>
+    <string name="gfx_driver_status_none">Not installed. Download a Turnip driver ZIP
+        (arm64) and install it below.</string>
+    <string name="gfx_driver_status_installed">Installed driver: %1$s</string>
+    <string name="gfx_driver_status_bundled">Using the driver bundled in the APK.</string>
+    <string name="gfx_driver_install">Install Turnip from ZIP…</string>
+    <string name="gfx_driver_remove">Remove installed driver</string>
+    <string name="gfx_driver_button">GPU driver (Turnip)…</string>
+    <string name="turnip_install_done">Turnip driver installed: %1$s. Select it and
+        restart the game.</string>
+    <string name="turnip_install_failed">Failed to install the driver: %1$s</string>
+    <string name="gfx_vsync">Vertical sync (VSync)</string>
+    <string name="gfx_resolution">Internal resolution</string>
+    <string name="gfx_resolution_hint">2x/3x sharpen the picture but need a strong GPU
+        - on most phones keep 1x.</string>
+    <string name="gfx_post">Anti-aliasing (post-processing)</string>
+    <string name="gfx_post_none">Off</string>
+    <string name="gfx_post_strong">(strong)</string>
+    <string name="gfx_fps">Frame limit</string>
+    <string name="gfx_fps_hint">30 saves battery and smooths out weaker phones;
+        60 is the full rate.</string>
+    <string name="gfx_letterbox">Keep 16:9 aspect ratio (letterbox)</string>
+    <string name="gfx_aniso">Anisotropic filtering</string>
+    <string name="gfx_aniso_default">Default</string>
+    <string name="gfx_restart_note">Applied at the next game start.</string>
+    <string name="gfx_show_fps">Show FPS counter (performance overlay)</string>
+    <string name="gfx_compat_title">Troubleshooting (known issues)</string>
+    <string name="gfx_compat_missing_geometry">Characters or objects do not appear</string>
+    <string name="gfx_compat_flicker">Flickering or shimmering textures</string>
+    <string name="gfx_compat_hint">Only enable these if you actually see the
+        described problem. If enabling a fix makes things worse or the game
+        crashes, turn it back off.</string>
+
+    <!-- On-device ISO install -->
+    <string name="setup_install_iso">Install from ISO…</string>
+    <string name="setup_install_help">Pick your legally-owned game ISO - it will be
+        extracted right on the phone (a few minutes and ~5 GB of free space).</string>
+    <string name="setup_extract_progress">Extracting ISO… %1$s of ~%2$s</string>
+    <string name="setup_extract_preparing">Preparing extraction…</string>
+    <string name="setup_extract_failed">Extraction failed: %1$s</string>
+    <string name="setup_extract_notiso">The picked file does not look like a Simpsons
+        Game ISO (no default.xex inside).</string>
+    <string name="setup_extract_space">Not enough free space: need about %1$s, available %2$s.</string>
+    <string name="setup_extract_done">Game installed from ISO.</string>
+</resources>

@@ -132,8 +132,20 @@ uint64_t FunctionDispatcher::ExecuteInterrupt(ThreadState* thread_state, uint32_
   SCOPE_profile_cpu_f("cpu");
   PROFILE_INTERRUPT_DISPATCHED();
 
-  // Hold the global lock during interrupt dispatch.
-  auto global_lock = global_critical_region_.Acquire();
+  // Serialize interrupt dispatches against each other, but do NOT hold the
+  // global critical region while the guest callback runs.
+  //
+  // The interrupt callback executes arbitrary recompiled guest code (the
+  // game's vblank handler runs at 60 Hz, PM4_INTERRUPT runs on the GPU
+  // thread). Holding the global lock for its whole duration forces every
+  // concurrent write-watch fault resolution, kernel-object refcount and
+  // audio submission to stall until the callback finishes - on mobile SoCs
+  // (2-4 big cores shared with the whole guest) that serialization is a
+  // major frame-time stall. Interrupt callbacks run on their own thread
+  // state and everything they touch (kernel objects, page watches, memory
+  // protection) acquires the global lock itself, so guest execution does
+  // not need it.
+  std::lock_guard<std::mutex> interrupt_lock(interrupt_dispatch_mutex_);
 
   auto* ctx = thread_state->context();
   assert_true(arg_count <= 5);

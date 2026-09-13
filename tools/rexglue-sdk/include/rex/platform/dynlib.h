@@ -25,6 +25,15 @@ class DynamicLibrary {
   void Close();
   explicit operator bool() const { return handle_ != nullptr; }
 
+  /**
+   * Takes ownership of an already-open library handle (e.g. a dlopen handle
+   * produced by a driver-loading helper such as libadrenotools) without
+   * opening anything. The handle is closed by Close()/destruction like a
+   * Load()ed one. Android-only in practice, defined on every platform so the
+   * class stays uniform.
+   */
+  void Adopt(void* handle);
+
   void* GetRawSymbol(const char* name) const;
 
   template <typename T>

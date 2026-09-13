@@ -94,3 +94,16 @@ launcher/diagnostics/
 
 # codegraph: rebuildable index (tools/codegraph/recomp_index.py build), not source
 tools/codegraph/*.sqlite
+
+# ============================================================
+# Android port
+# ============================================================
+# Gradle / AGP build state
+android/.gradle/
+android/.cxx/
+android/app/.cxx/
+android/local.properties
+android/app/release/
+# The launcher icons are the one place PNGs are source files (regenerate with
+# android/tools/make_icon.py)
+!android/app/src/main/res/**/ic_launcher*.png

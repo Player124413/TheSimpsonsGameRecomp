@@ -1,0 +1,146 @@
+name: Android build
+
+# APK build for the Android port (arm64-v8a, Vulkan).
+#
+# Push/PR: quick sanity build (debug APK from the committed generated code -
+# exactly like the Windows/Linux CI, no game dump needed: the repository
+# ships the pre-generated recompiled sources).
+#
+# Manual (Actions tab -> Run workflow): optionally supply
+#   - turnip_url: a ZIP containing an arm64 Turnip (Mesa/Freedreno) driver
+#                 (any libvulkan*.so inside; it is packaged into the APK as
+#                 libvulkan.turnip.so and becomes selectable in Graphics).
+#                 Drivers can also be installed from a ZIP right in the app,
+#                 so this input is pure convenience for distributions.
+#   - build_type: debug or release.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      turnip_url:
+        description: "URL to a Turnip driver ZIP (arm64 libvulkan*.so) to bundle (optional)"
+        required: false
+        default: ""
+      build_type:
+        description: "Build type"
+        type: choice
+        default: "debug"
+        options: [debug, release]
+
+jobs:
+  android:
+    name: Android arm64 APK
+    runs-on: ubuntu-24.04
+    env:
+      TURNIP_URL: ${{ inputs.turnip_url }}
+      BUILD_TYPE: ${{ inputs.build_type || 'debug' }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install JDK 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK (platform 35, build-tools, platform-tools)
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages + CMake
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" \
+            "build-tools;35.0.0" "cmake;3.31.1" > /dev/null
+
+      # ------------------------------------------------------------------
+      # Optional: bundle a Turnip driver
+      # ------------------------------------------------------------------
+      - name: Fetch and install the Turnip driver into jniLibs
+        if: env.TURNIP_URL != ''
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 --retry-delay 5 -o /tmp/turnip.zip "$TURNIP_URL"
+          rm -rf /tmp/turnip && mkdir -p /tmp/turnip
+          unzip -q -o /tmp/turnip.zip -d /tmp/turnip
+          # Accept the usual layouts: arm64-v8a/libvulkan*.so, lib/arm64...,
+          # or a flat libvulkan_freedreno/turnip .so.
+          SO="$(find /tmp/turnip -name 'libvulkan*.so' -path '*arm64*' | head -n 1)"
+          if [ -z "$SO" ]; then
+            SO="$(find /tmp/turnip -name 'libvulkan*.so' | head -n 1)"
+          fi
+          test -n "$SO" || { echo "No libvulkan*.so inside the Turnip ZIP"; exit 1; }
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+          cp "$SO" android/app/src/main/jniLibs/arm64-v8a/libvulkan.turnip.so
+          ls -lh android/app/src/main/jniLibs/arm64-v8a/
+
+      # ------------------------------------------------------------------
+      # APK
+      # ------------------------------------------------------------------
+      - name: Gradle assemble (${{ env.BUILD_TYPE }})
+        working-directory: android
+        run: |
+          set -euo pipefail
+          test -x ./gradlew
+          test -f ../simpsons/generated/default/sources.cmake
+          test -f ../tools/rexglue-sdk/CMakeLists.txt
+          ./gradlew --no-daemon "assemble$(tr '[:lower:]' '[:upper:]' <<< "${BUILD_TYPE:0:1}")${BUILD_TYPE:1}" 2>&1 | tee /tmp/gradle.log
+
+      # The sandbox/tooling some of us use cannot reach the Actions log
+      # storage; surface the actual compiler/cmake errors as run annotations
+      # (served by api.github.com) so they are reachable everywhere.
+      - name: Surface build errors as annotations
+        if: failure()
+        run: |
+          LOG=/tmp/gradle.log
+          [ -f "$LOG" ] || exit 0
+          # Errors first (annotations are capped at 50/check-run and notes
+          # otherwise crowd them out); dedup keeps repeated per-TU errors
+          # (same header error in many TUs) from flooding the cap.
+          {
+            grep -E "error:|error generated|FAILED:|FAILURE:|CMake Error|ninja: build stopped|symbol:|location:" "$LOG" \
+              | awk '!seen[$0]++' | head -45
+            grep -E "note:" "$LOG" | awk '!seen[$0]++' | head -10
+          } | while IFS= read -r line; do
+            printf '::error::%s\n' "$(printf '%s' "$line" | cut -c1-240)"
+          done
+
+      - name: Upload build log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log
+          path: /tmp/gradle.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Verify the APK contents
+        run: |
+          set -euo pipefail
+          APK="$(find android/app/build/outputs/apk -name '*.apk' | head -n 1)"
+          test -n "$APK" && ls -lh "$APK"
+          unzip -l "$APK" > /tmp/apk-list.txt
+          for lib in libmain.so librexruntime.so libc++_shared.so libxiso.so \
+                      libmain_hook.so libhook_impl.so; do
+            grep -q "lib/arm64-v8a/$lib" /tmp/apk-list.txt || {
+              echo "APK is missing $lib"; exit 1
+            }
+          done
+          if [ -n "$TURNIP_URL" ]; then
+            grep -q "lib/arm64-v8a/libvulkan.turnip.so" /tmp/apk-list.txt || {
+              echo "APK is missing the bundled Turnip driver"; exit 1
+            }
+          fi
+          echo "APK contents verified:"
+          grep "lib/arm64-v8a" /tmp/apk-list.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: simpsons-android-arm64-${{ env.BUILD_TYPE }}
+          path: android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
